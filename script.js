@@ -12,7 +12,8 @@ if (typeof Matter === 'undefined') {
           Events = Matter.Events,
           Mouse = Matter.Mouse,
           MouseConstraint = Matter.MouseConstraint,
-          Query = Matter.Query; // Needed for checking body under mouse
+          Query = Matter.Query,
+          World = Matter.World; // Added World for direct manipulation if needed
 
     const canvasWidth = window.innerWidth;
     const canvasHeight = window.innerHeight;
@@ -28,7 +29,7 @@ if (typeof Matter === 'undefined') {
             width: canvasWidth,
             height: canvasHeight,
             wireframes: false,
-            background: '#87CEEB' // Initial sky color
+            background: '#87CEEB'
         }
     });
 
@@ -43,12 +44,15 @@ if (typeof Matter === 'undefined') {
     Composite.add(world, [ground]);
 
     let score = 0;
-    let currentBlock = null; // The block being prepared/dragged
+    let currentBlock = null;
     let isGameOver = false;
     let windForceX = 0;
-    const maxWindForce = 0.008; // Slightly increased max wind
-    const strongWindThreshold = 0.005; // Wind force above this allows holding
-    let heldBlock = null; // The block currently being held static by the player
+    const maxWindForce = 0.010; // Increased slightly again
+    const strongWindThreshold = 0.006;
+    let heldBlock = null;
+    let draggedBlock = null; // Ensure this is defined globally in this scope
+    const targetHeightY = 150; // Y-coordinate for the target line (lower Y is higher on screen)
+    let levelCleared = false; // Flag to manage level transition
 
     const blockColors = ["#FF5733", "#33FF57", "#3357FF", "#FF33A1", "#FFFF33", "#FF8C00", "#DA70D6", "#00CED1"];
     const shapeTypes = ['rectangle', 'circle', 'small_rectangle', 'wide_rectangle'];
@@ -72,11 +76,11 @@ if (typeof Matter === 'undefined') {
              windDisplay += `${windForceX > 0 ? '>>' : '<<'} (${(absWind * 1000).toFixed(1)})`;
              if (absWind >= strongWindThreshold) {
                  windDisplay += " STRONG!";
-                 ctx.fillStyle = "red"; // Indicate strong wind
+                 ctx.fillStyle = "red";
              }
         }
         ctx.fillText(windDisplay, 20, 70);
-        ctx.fillStyle = "black"; // Reset color
+        ctx.fillStyle = "black";
 
 
         if (isGameOver) {
@@ -87,15 +91,40 @@ if (typeof Matter === 'undefined') {
             ctx.textAlign = "center";
             ctx.fillText("GAME OVER", canvasWidth / 2, canvasHeight / 2 - 10);
             ctx.font = "20px Arial";
-            ctx.fillText("Score: " + score, canvasWidth / 2, canvasHeight / 2 + 25);
-            // Simple Reload instruction
+            ctx.fillText("Final Score: " + score, canvasWidth / 2, canvasHeight / 2 + 25);
             ctx.fillText("Refresh page (F5) to restart", canvasWidth/2, canvasHeight / 2 + 50);
-
         }
     }
 
+     function resetLevel() {
+        console.log("Resetting level...");
+        levelCleared = true; // Signal that we are clearing
+
+        // Remove all non-ground bodies
+        const bodiesToRemove = Composite.allBodies(world).filter(body => body.label !== 'ground');
+        bodiesToRemove.forEach(body => Composite.remove(world, body));
+
+        // Reset game state variables
+        score = 0;
+        currentBlock = null;
+        heldBlock = null;
+        draggedBlock = null;
+        // isGameOver should remain false unless triggered again
+        // windForceX will be updated by the interval
+
+        // Add a small delay before preparing the next block for a smoother transition
+        setTimeout(() => {
+            levelCleared = false; // Allow game logic to resume fully
+             if (!isGameOver) { // Don't prepare if somehow game over triggered during reset
+                prepareNextBlock();
+            }
+        }, 500); // 0.5 second delay
+    }
+
+
     function prepareNextBlock() {
-        if (isGameOver) return;
+        // Don't prepare if game over, or if a level is currently being cleared
+        if (isGameOver || levelCleared || currentBlock) return;
 
         const blockStartX = canvasWidth / 2;
         const blockStartY = 50;
@@ -109,48 +138,49 @@ if (typeof Matter === 'undefined') {
             friction: 0.7,
             restitution: 0.1,
             density: 0.005,
-            isStatic: true, // Start static at the top
-            label: 'nextBlock', // Special label for the draggable block
+            isStatic: true,
+            label: 'nextBlock',
             render: { fillStyle: blockColor }
         };
 
          switch (shapeType) {
              case 'circle':
-                 const radius = 30 + Math.random() * 20;
+                 const radius = 25 + Math.random() * 15; // slightly smaller circles maybe
                  newBlock = Bodies.circle(blockStartX, blockStartY, radius, blockOptions);
-                 newBlock.blockWidth = radius * 2; // Approx width for positioning logic
+                 newBlock.blockWidth = radius * 2;
+                 newBlock.blockHeight = radius * 2; // Store height for goal check
                  break;
              case 'small_rectangle':
-                  blockWidth = 50 + Math.random() * 30;
+                  blockWidth = 40 + Math.random() * 30;
                   blockHeight = 20 + Math.random() * 20;
                   newBlock = Bodies.rectangle(blockStartX, blockStartY, blockWidth, blockHeight, blockOptions);
                   break;
              case 'wide_rectangle':
-                  blockWidth = 120 + Math.random() * 50;
-                  blockHeight = 20 + Math.random() * 10;
+                  blockWidth = 100 + Math.random() * 50;
+                  blockHeight = 15 + Math.random() * 10;
                   newBlock = Bodies.rectangle(blockStartX, blockStartY, blockWidth, blockHeight, blockOptions);
                   break;
              case 'rectangle':
              default:
-                  blockWidth = 80 + Math.random() * 40;
-                  blockHeight = 30 + Math.random() * 20;
+                  blockWidth = 60 + Math.random() * 40;
+                  blockHeight = 25 + Math.random() * 20;
                   newBlock = Bodies.rectangle(blockStartX, blockStartY, blockWidth, blockHeight, blockOptions);
                   break;
          }
-         if (!newBlock.blockWidth) {
-             newBlock.blockWidth = blockWidth; // Ensure width is stored
-         }
+         if (!newBlock.blockWidth) newBlock.blockWidth = blockWidth;
+         if (!newBlock.blockHeight) newBlock.blockHeight = blockHeight; // Ensure height is stored
 
-        currentBlock = newBlock; // Keep track of the block being prepared
+
+        currentBlock = newBlock;
         Composite.add(world, currentBlock);
-        console.log(`Prepared next block: ${shapeType}. Drag and release to drop.`);
+        console.log(`Prepared next block: ${shapeType}. Drag and release.`);
     }
 
 
     function updateWind() {
-         if (isGameOver) return;
+         if (isGameOver || levelCleared) return;
          windForceX = (Math.random() - 0.5) * 2 * maxWindForce;
-         console.log("Wind updated:", windForceX);
+         // console.log("Wind updated:", windForceX); // Less console spam
     }
 
     // --- Mouse Control Setup ---
@@ -158,65 +188,82 @@ if (typeof Matter === 'undefined') {
     const mouseConstraint = MouseConstraint.create(engine, {
         mouse: mouse,
         constraint: {
-            stiffness: 0.1, // Makes dragging a bit elastic
-            render: {
-                visible: false // Don't draw the constraint line
-            }
+            stiffness: 0.1,
+            render: { visible: false }
         }
     });
-
     Composite.add(world, mouseConstraint);
-    // Keep track of the body being dragged for placement
-    let draggedBlock = null;
 
 
     // --- Mouse Event Handling ---
     Events.on(mouseConstraint, 'mousedown', (event) => {
-        if (isGameOver) return;
+        if (isGameOver || levelCleared) return;
 
         const mousePos = event.mouse.position;
+        // Find bodies specifically under the mouse, prioritizing 'nextBlock'
         const bodiesUnderMouse = Query.point(Composite.allBodies(world), mousePos);
+        let clickedBody = null;
+        let foundNextBlock = false;
 
-        if (bodiesUnderMouse.length > 0) {
-            const clickedBody = bodiesUnderMouse[0];
+        // Explicitly check if 'nextBlock' is under mouse
+        for (const body of bodiesUnderMouse) {
+            if (body.label === 'nextBlock' && body === currentBlock) {
+                clickedBody = body;
+                foundNextBlock = true;
+                break; // Found the priority target
+            }
+        }
+        // If nextBlock wasn't found directly, check for other interactable bodies
+        if (!foundNextBlock && bodiesUnderMouse.length > 0) {
+             // Check if we clicked a placed block during strong wind
+             for (const body of bodiesUnderMouse) {
+                  if (body.label === 'block' && !body.isStatic && !body.isSettling && Math.abs(windForceX) >= strongWindThreshold) {
+                      clickedBody = body;
+                      break;
+                  }
+             }
+        }
 
-            if (clickedBody.label === 'nextBlock' && clickedBody === currentBlock) {
+
+        if (clickedBody) {
+            if (clickedBody.label === 'nextBlock') {
                 // Picked up the block waiting at the top
                 draggedBlock = clickedBody;
                 console.log("Dragging next block");
-            } else if (clickedBody.label === 'block' && !clickedBody.isStatic && !clickedBody.isSettling) {
-                // Clicked on an already placed, potentially unstable block
-                if (Math.abs(windForceX) >= strongWindThreshold) {
-                    // Allow holding only during strong wind
-                    heldBlock = clickedBody;
-                    Body.setStatic(heldBlock, true); // Temporarily lock it
-                    heldBlock.render.opacity = 0.5; // Visual feedback
-                    console.log("Holding block against strong wind!");
-                }
+            } else if (clickedBody.label === 'block') {
+                 // Clicked on an already placed, potentially unstable block during strong wind
+                 heldBlock = clickedBody;
+                 Body.setStatic(heldBlock, true);
+                 heldBlock.render.opacity = 0.5;
+                 console.log("Holding block against strong wind!");
             }
         }
     });
 
     Events.on(mouseConstraint, 'mouseup', (event) => {
-        if (isGameOver) return;
+        if (isGameOver || levelCleared) { // Also ensure held blocks are released visually if level cleared during hold
+             if (heldBlock) {
+                  heldBlock.render.opacity = 1.0;
+                  heldBlock = null;
+             }
+             draggedBlock = null; // Ensure drag state is cleared too
+             return;
+        }
 
         if (draggedBlock) {
-            // Released the block being placed
             console.log("Released block for dropping");
-            draggedBlock.label = 'block'; // Now it's a normal block
+            // Check if the release position is valid (e.g., not inside another block - complex check, skip for now)
+            draggedBlock.label = 'block';
             draggedBlock.isSettling = true;
-            Body.setStatic(draggedBlock, false); // Let physics take over
-            currentBlock = null; // No longer the 'current' prepared block
+            Body.setStatic(draggedBlock, false);
+            currentBlock = null;
             draggedBlock = null;
-            // Landing check will handle score and preparing the next block
         }
 
         if (heldBlock) {
-            // Released a block being held against wind
             console.log("Released held block");
-            heldBlock.render.opacity = 1.0; // Restore visual
-             // Only make dynamic IF game isn't over (safety check)
-            if (!isGameOver) {
+            heldBlock.render.opacity = 1.0;
+             if (!isGameOver && !levelCleared) { // Don't make dynamic if game ended/resetting
                  Body.setStatic(heldBlock, false);
              }
             heldBlock = null;
@@ -226,47 +273,60 @@ if (typeof Matter === 'undefined') {
 
     // --- Physics and Game Loop ---
     Events.on(engine, 'beforeUpdate', (event) => {
-        if (isGameOver || Math.abs(windForceX) < 0.0001) return;
+        if (isGameOver || levelCleared || Math.abs(windForceX) < 0.0001) return;
 
         const bodies = Composite.allBodies(world);
          for (let i = 0; i < bodies.length; i++) {
              const body = bodies[i];
-             // Apply wind ONLY to blocks actively settling and not the one being held
-             if (body.isSettling && !body.isStatic && body.label === 'block' && body !== heldBlock) {
+             // Apply wind to all non-static blocks except ground, held, and the one being prepared/dragged
+              if (!body.isStatic && body.label !== 'ground' && body !== heldBlock && body !== currentBlock) {
                  Body.applyForce(body, body.position, { x: windForceX, y: 0 });
              }
          }
     });
 
     Events.on(engine, 'afterUpdate', (event) => {
+        // If level is clearing, just draw info and skip game logic
+         if (levelCleared) {
+             displayInfo();
+             return;
+         }
+         // If game is over, stop runner and draw info
         if (isGameOver) {
+             // Ensure runner is stopped only once
+             if (runner.enabled) {
+                 Runner.stop(runner);
+             }
              displayInfo();
              return;
          }
 
         const bodies = Composite.allBodies(world);
         let blockHasSettledThisFrame = false;
-        const floorLevel = ground.position.y - 25; // Approx top edge of the ground
+        const floorLevel = ground.position.y - 25;
 
         for (let i = 0; i < bodies.length; i++) {
             const body = bodies[i];
+            if (body.label === 'ground' || body.isStatic) continue; // Skip ground and static blocks
 
-             // Game Over Check: If a block center falls way off screen
-            if (body.label === 'block' && !body.isStatic && body.position.y > canvasHeight + 150) {
+            // --- Game Over Check ---
+            // Check if center is far below ground OR far off sides
+            const isOffBottom = body.position.y > canvasHeight + 50; // Adjusted threshold
+            const isOffSides = Math.abs(body.position.x - canvasWidth / 2) > canvasWidth / 2 + 100; // Check sides
+            if (body.label === 'block' && (isOffBottom || isOffSides)) {
                 console.log("Game Over - Block fell off!");
                 isGameOver = true;
-                // Ensure any held block is released visually/physically on game over
-                if (heldBlock) {
-                    heldBlock.render.opacity = 1.0;
-                    // Runner is stopped below, so no need to setStatic(false)
-                    heldBlock = null;
+                if (heldBlock) { // Ensure held block is visually reset on game over
+                     heldBlock.render.opacity = 1.0;
+                     heldBlock = null;
                 }
-                Runner.stop(runner);
-                break;
+                // Stop runner will happen in the main check at the start of afterUpdate
+                break; // Exit loop once game is over
             }
 
-            // Landing Check
-            if (body.isSettling && !body.isStatic && body !== draggedBlock) {
+
+            // --- Landing and Goal Check ---
+            if (body.isSettling) { // Check only blocks that were dropped
                 const speed = body.speed;
                 const angularSpeed = body.angularSpeed;
                 const speedThreshold = 0.1;
@@ -280,28 +340,57 @@ if (typeof Matter === 'undefined') {
 
                 const settleFramesRequired = 30;
                 if (body.settleTimer >= settleFramesRequired) {
-                    body.isSettling = false;
+                    body.isSettling = false; // Stop settling check
                     body.settleTimer = 0;
 
-                    if (!blockHasSettledThisFrame && !currentBlock && !draggedBlock) { // Ensure next isn't prepared while dragging
+                    if (!blockHasSettledThisFrame && !currentBlock && !draggedBlock) {
                         score++;
                         console.log("Block landed! Score:", score);
-                        prepareNextBlock();
-                        blockHasSettledThisFrame = true;
+
+                        // --- Goal Check ---
+                        const blockTopY = body.position.y - (body.blockHeight || 30) / 2; // Use stored height
+                        if (blockTopY <= targetHeightY) {
+                             console.log("Target height reached!");
+                             resetLevel(); // Clear tower and restart
+                             // Since resetLevel is called, we prevent preparing next block normally
+                             blockHasSettledThisFrame = true; // Prevent prepareNextBlock below
+                             // Exit the loop early as the level is resetting
+                             break;
+                         } else {
+                             // Only prepare next block if goal wasn't reached
+                             prepareNextBlock();
+                             blockHasSettledThisFrame = true;
+                         }
                     }
                 }
             }
-        }
+        } // End of body loop
+
         displayInfo();
     });
+
+    // --- Draw Target Line ---
+     Events.on(render, 'afterRender', (event) => {
+        const ctx = render.context;
+        ctx.beginPath();
+        ctx.setLineDash([10, 10]); // Dashed line style
+        ctx.moveTo(0, targetHeightY);
+        ctx.lineTo(canvasWidth, targetHeightY);
+        ctx.strokeStyle = 'rgba(255, 0, 0, 0.7)'; // Red dashed line
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.setLineDash([]); // Reset dash style
+        ctx.lineWidth = 1; // Reset line width
+     });
+
 
     // --- Initialize ---
     Render.run(render);
     const runner = Runner.create();
     Runner.run(runner, engine);
 
-    setInterval(updateWind, 4000); // Update wind every 4 seconds
-    prepareNextBlock(); // Prepare the first block
+    setInterval(updateWind, 3500); // Update wind slightly more often
+    prepareNextBlock();
 
-    console.log("Stack Forever: Mouse controls active! Drag blocks, hold against strong wind.");
+    console.log("Stack Forever: Reach the red line! Mouse controls. Hold blocks in strong wind.");
 }
