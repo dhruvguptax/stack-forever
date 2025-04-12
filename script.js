@@ -6,8 +6,8 @@ if (typeof Matter === 'undefined') {
     const Engine = Matter.Engine, Render = Matter.Render, Runner = Matter.Runner,
           Bodies = Matter.Bodies, Body = Matter.Body, Composite = Matter.Composite,
           Events = Matter.Events, Mouse = Matter.Mouse, MouseConstraint = Matter.MouseConstraint,
-          Query = Matter.Query, World = Matter.World, Constraint = Matter.Constraint, // Added Constraint
-          Detector = Matter.Detector; // Added Detector for glue collisions
+          Query = Matter.Query, World = Matter.World, Constraint = Matter.Constraint,
+          Detector = Matter.Detector;
 
     const canvasWidth = window.innerWidth;
     const canvasHeight = window.innerHeight;
@@ -15,9 +15,6 @@ if (typeof Matter === 'undefined') {
     const engine = Engine.create();
     const world = engine.world;
     engine.world.gravity.y = 1;
-    // Optional: Increase position iterations for constraint stability
-    // engine.positionIterations = 10;
-    // engine.velocityIterations = 8;
 
     const render = Render.create({
         element: document.body,
@@ -39,58 +36,60 @@ if (typeof Matter === 'undefined') {
     let currentBlock = null;
     let isGameOver = false;
     let windForceX = 0;
-    let maxWindForce = 0.010; // Base max wind, will scale
+    let maxWindForce = 0.010;
     const strongWindThreshold = 0.006;
     let heldBlock = null;
     let draggedBlock = null;
     const targetHeightY = 150;
     let levelCleared = false;
     let highestBlockY = canvasHeight;
-    let particles = []; // For particle effects
+    let particles = [];
+    let blocksFallenThisLevel = 0;
 
     const blockColors = ["#FF5733", "#33FF57", "#3357FF", "#FF33A1", "#FFFF33", "#FF8C00", "#DA70D6", "#00CED1"];
     const shapeTypes = ['rectangle', 'circle', 'small_rectangle', 'wide_rectangle'];
 
-    let autoDropIntervalMs = 5000; // Base drop interval, will scale
-    const minDropIntervalMs = 2500; // Fastest drop rate
-    const maxAllowableWindForce = 0.025; // Cap wind scaling
+    let autoDropIntervalMs = 5000;
+    const minDropIntervalMs = 2500;
+    const maxAllowableWindForce = 0.025;
     let autoDropTimeoutId = null;
     let windUpdateTimeoutId = null;
 
-    // --- Glue Mechanic Variables ---
-    const glueTriggerScore = 10; // Apply glue every 10 points
-    let lastGlueScore = -1; // Ensure glue triggers correctly
-    const glueStiffness = 0.01; // How rigid the glue is
-    const glueBreakStretchRatio = 1.2; // Breaks if stretched > 20%
+    let lastGlueScore = -1;
+    const glueStiffness = 0.01;
+    const glueBreakStretchRatio = 1.2;
+    const initialGlueScores = [4, 6, 8];
+    const subsequentGlueInterval = 4;
 
-    // --- Utility Functions ---
     function getRandomElement(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
     function randomInRange(min, max) { return Math.random() * (max - min) + min; }
     function distance(posA, posB) { const dx = posA.x - posB.x; const dy = posA.y - posB.y; return Math.sqrt(dx * dx + dy * dy); }
+    function getWeightLabel(density) {
+        if (density <= 0.0035) return "Lgt";
+        if (density <= 0.0055) return "Med";
+        return "Hvy";
+    }
+     function isGlueTriggerScore(scoreToCheck) {
+         if (initialGlueScores.includes(scoreToCheck)) { return true; }
+         const lastInitial = initialGlueScores[initialGlueScores.length - 1];
+         if (scoreToCheck > lastInitial && (scoreToCheck - lastInitial) % subsequentGlueInterval === 0) { return true; }
+         return false;
+     }
 
-    // --- Particle System ---
     function createParticles(x, y, pColor, count, intensity) {
         for (let i = 0; i < count; i++) {
-            particles.push({
-                x: x, y: y,
-                vx: randomInRange(-intensity, intensity), vy: randomInRange(-intensity * 1.5, -intensity * 0.5), // Burst upwards slightly
-                life: randomInRange(30, 60), // Frames to live
-                radius: randomInRange(1, 3),
-                color: pColor || 'rgba(255, 255, 255, 0.7)' // Default white
-            });
+            particles.push({ x: x, y: y, vx: randomInRange(-intensity, intensity), vy: randomInRange(-intensity * 1.5, -intensity * 0.5), life: randomInRange(30, 60), radius: randomInRange(1, 3), color: pColor || 'rgba(255, 255, 255, 0.7)' });
         }
     }
     function updateAndDrawParticles(ctx) {
-        const gravity = 0.1; // Simple particle gravity
+        const gravity = 0.1;
         for (let i = particles.length - 1; i >= 0; i--) {
-            const p = particles[i];
-            p.x += p.vx; p.y += p.vy; p.vy += gravity; p.life--;
+            const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += gravity; p.life--;
             if (p.life <= 0) { particles.splice(i, 1); continue; }
             ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2); ctx.fill();
         }
     }
 
-    // --- Display ---
     function displayInfo() {
         const ctx = render.context; ctx.fillStyle = "black"; ctx.font = "24px Arial"; ctx.textAlign = "left";
         ctx.fillText("Score: " + score, 20, 40);
@@ -100,100 +99,67 @@ if (typeof Matter === 'undefined') {
              if (absWind >= strongWindThreshold) { windDisplay += " STRONG!"; ctx.fillStyle = "red"; }
         }
         ctx.fillText(windDisplay, 20, 70); ctx.fillStyle = "black";
-        if (isGameOver) { /* Game Over Text */ } // (Keep existing game over text logic)
+        if (isGameOver) {
+            ctx.fillStyle = "rgba(0, 0, 0, 0.7)"; ctx.fillRect(0, canvasHeight / 2 - 60, canvasWidth, 120);
+            ctx.fillStyle = "white"; ctx.font = "40px Arial"; ctx.textAlign = "center";
+            ctx.fillText("GAME OVER", canvasWidth / 2, canvasHeight / 2 - 10);
+            ctx.font = "20px Arial"; ctx.fillText("Final Score: " + score, canvasWidth / 2, canvasHeight / 2 + 25);
+            ctx.fillText("Refresh page (F5) to restart", canvasWidth/2, canvasHeight / 2 + 50);
+        }
     }
 
-    // --- Sky Color Update ---
-    function updateSkyColor() { /* Keep existing sky color logic */ }
+    function updateSkyColor() {
+        let progress = Math.max(0, Math.min(1, (canvasHeight - highestBlockY) / (canvasHeight - targetHeightY - 50)));
+        let skyColor;
+        if (progress < 0.25) { skyColor = '#87CEEB'; }
+        else if (progress < 0.5) { skyColor = `rgb(${Math.round(135 + (255 - 135) * (progress - 0.25) * 4)}, ${Math.round(206 - (206 - 165) * (progress - 0.25) * 4)}, ${Math.round(235 - (235 - 0) * (progress - 0.25) * 4)})`; }
+        else if (progress < 0.75) { skyColor = `rgb(${Math.round(255 - (255 - 128) * (progress - 0.5) * 4)}, ${Math.round(165 - (165 - 0) * (progress - 0.5) * 4)}, ${Math.round(0 + (128 - 0) * (progress - 0.5) * 4)})`; }
+        else { skyColor = `rgb(${Math.round(128 - (128 - 100) * (progress - 0.75) * 4)}, 0, ${Math.round(128 + (0 - 128) * (progress - 0.75) * 4)})`; }
+        render.options.background = skyColor;
+    }
 
-    // --- Glue Mechanic ---
     function applyGlue() {
-        if (isGameOver || levelCleared) return;
-        console.log("Applying glue!");
-        createParticles(canvasWidth / 2, canvasHeight / 2, 'rgba(200, 200, 255, 0.8)', 30, 5); // Visual effect
-
+        if (isGameOver || levelCleared) return; console.log("Applying glue!");
+        createParticles(canvasWidth / 2, canvasHeight / 2, 'rgba(200, 200, 255, 0.8)', 30, 5);
         const blocks = Composite.allBodies(world).filter(body => body.label === 'block' && !body.isStatic);
-        if (blocks.length < 2) return; // Need at least two blocks
-
-        // Find potential collision pairs using Detector
-        const detector = Detector.create();
-        Detector.setBodies(detector, blocks);
-        const pairs = Detector.collisions(detector);
-
+        if (blocks.length < 2) return;
+        const detector = Detector.create(); Detector.setBodies(detector, blocks); const pairs = Detector.collisions(detector);
         const existingConstraints = Composite.allConstraints(world).filter(c => c.label === 'glue');
-
         pairs.forEach(pair => {
             const bodyA = pair.bodyA; const bodyB = pair.bodyB;
-            // Check if already glued
             const alreadyGlued = existingConstraints.some(c => (c.bodyA === bodyA && c.bodyB === bodyB) || (c.bodyA === bodyB && c.bodyB === bodyA));
             if (alreadyGlued) return;
-
-            // Use SAT check for actual collision confirmation (more robust than distance)
             const collisionInfo = Matter.Collision.collides(bodyA, bodyB);
             if (collisionInfo && collisionInfo.collided) {
                  const currentDist = distance(bodyA.position, bodyB.position);
-                 const constraint = Constraint.create({
-                     bodyA: bodyA, bodyB: bodyB,
-                     length: currentDist, // Set length to current distance
-                     stiffness: glueStiffness,
-                     label: 'glue',
-                     render: { type: 'line', anchors: false, strokeStyle: '#FFFFFF', lineWidth: 1, visible: true }
-                 });
-                 Composite.add(world, constraint);
-                 console.log("Glued two blocks");
+                 const constraint = Constraint.create({ bodyA: bodyA, bodyB: bodyB, length: currentDist, stiffness: glueStiffness, label: 'glue', render: { type: 'line', anchors: false, strokeStyle: '#FFFFFF', lineWidth: 1, visible: true } });
+                 Composite.add(world, constraint); console.log("Glued two blocks");
             }
         });
     }
     function checkAndBreakGlue(windIsStrong) {
-        if (!windIsStrong) return; // Only break during strong wind
-
+        if (!windIsStrong) return;
         const glueConstraints = Composite.allConstraints(world).filter(c => c.label === 'glue');
         glueConstraints.forEach(constraint => {
             const bodyA = constraint.bodyA; const bodyB = constraint.bodyB;
-            // Don't break if player is holding one of the involved blocks
             if (heldBlock === bodyA || heldBlock === bodyB) return;
-
             const currentDist = distance(bodyA.position, bodyB.position);
             if (currentDist > constraint.length * glueBreakStretchRatio) {
-                 console.log("Glue broken by wind!");
-                 createParticles((bodyA.position.x + bodyB.position.x)/2, (bodyA.position.y + bodyB.position.y)/2, 'rgba(255, 0, 0, 0.7)', 10, 3); // Red break effect
+                 console.log("Glue broken by wind!"); createParticles((bodyA.position.x + bodyB.position.x)/2, (bodyA.position.y + bodyB.position.y)/2, 'rgba(255, 0, 0, 0.7)', 10, 3);
                  Composite.remove(world, constraint);
             }
         });
     }
 
-    // --- Game Mechanics ---
     function resetLevel() {
-        console.log("Resetting level...");
-        levelCleared = true;
-        if (autoDropTimeoutId) clearTimeout(autoDropTimeoutId);
-        // Stop wind timer if needed, or let it run
-        // if (windUpdateTimeoutId) clearTimeout(windUpdateTimeoutId);
-
-        // Remove non-ground bodies AND glue constraints
-        const bodiesToRemove = Composite.allBodies(world).filter(body => body.label !== 'ground');
-        bodiesToRemove.forEach(body => Composite.remove(world, body));
-        const constraintsToRemove = Composite.allConstraints(world).filter(c => c.label === 'glue');
-        constraintsToRemove.forEach(c => Composite.remove(world, c));
-
-        // Increase Difficulty
-        autoDropIntervalMs = Math.max(minDropIntervalMs, autoDropIntervalMs * 0.95); // 5% faster drops
-        maxWindForce = Math.min(maxAllowableWindForce, maxWindForce * 1.1); // 10% stronger wind potential
+        console.log("Resetting level..."); levelCleared = true; if (autoDropTimeoutId) clearTimeout(autoDropTimeoutId);
+        const bodiesToRemove = Composite.allBodies(world).filter(body => body.label !== 'ground'); bodiesToRemove.forEach(body => Composite.remove(world, body));
+        const constraintsToRemove = Composite.allConstraints(world).filter(c => c.label === 'glue'); constraintsToRemove.forEach(c => Composite.remove(world, c));
+        autoDropIntervalMs = Math.max(minDropIntervalMs, autoDropIntervalMs * 0.95); maxWindForce = Math.min(maxAllowableWindForce, maxWindForce * 1.1);
         console.log(`New Drop Interval: ${autoDropIntervalMs}ms, Max Wind: ${maxWindForce.toFixed(4)}`);
-
-        score = 0; lastGlueScore = -1; // Reset score and glue tracking
-        currentBlock = null; heldBlock = null; draggedBlock = null;
-        highestBlockY = canvasHeight; render.options.background = '#87CEEB';
-        particles = []; // Clear particles
-
-        setTimeout(() => {
-            levelCleared = false;
-             if (!isGameOver) {
-                 prepareNextBlock(); // This will schedule the drop timer
-                 // Restart wind cycle if stopped, otherwise it continues
-                 // scheduleNextWindUpdate(); // If we were stopping it
-            }
-        }, 500);
+        score = 0; lastGlueScore = -1; blocksFallenThisLevel = 0;
+        currentBlock = null; heldBlock = null; draggedBlock = null; highestBlockY = canvasHeight; render.options.background = '#87CEEB'; particles = [];
+        setTimeout(() => { levelCleared = false; if (!isGameOver) { prepareNextBlock(); } }, 500);
     }
 
     function prepareNextBlock() {
@@ -201,133 +167,144 @@ if (typeof Matter === 'undefined') {
         const blockStartX = canvasWidth / 2; const blockStartY = 50;
         const shapeType = getRandomElement(shapeTypes); const blockColor = getRandomElement(blockColors);
         let newBlock, blockWidth = 100, blockHeight = 30, density = 0.005;
-        switch (shapeType) { /* Density assignment based on type */ } // (Keep existing density logic)
-        const blockOptions = { /* Material variance and options */ }; // (Keep existing options logic)
-        switch (shapeType) { /* Body creation based on type */ } // (Keep existing shape creation logic)
+        switch (shapeType) { case 'circle': density = 0.003; break; case 'small_rectangle': density = 0.004; break; case 'rectangle': density = 0.005; break; case 'wide_rectangle': density = 0.007; break; }
+        const blockOptions = { friction: Math.max(0.1, 0.6 + randomInRange(-0.1, 0.1)), restitution: Math.max(0, 0.1 + randomInRange(-0.05, 0.1)), density: density, isStatic: true, label: 'nextBlock', render: { fillStyle: blockColor } };
+        switch (shapeType) {
+             case 'circle': const radius = 20 + randomInRange(0, 15); newBlock = Bodies.circle(blockStartX, blockStartY, radius, blockOptions); newBlock.blockWidth = radius * 2; newBlock.blockHeight = radius * 2; break;
+             case 'small_rectangle': blockWidth = 40 + randomInRange(0, 30); blockHeight = 20 + randomInRange(0, 20); newBlock = Bodies.rectangle(blockStartX, blockStartY, blockWidth, blockHeight, blockOptions); break;
+             case 'wide_rectangle': blockWidth = 100 + randomInRange(0, 50); blockHeight = 15 + randomInRange(0, 10); newBlock = Bodies.rectangle(blockStartX, blockStartY, blockWidth, blockHeight, blockOptions); break;
+             case 'rectangle': default: blockWidth = 60 + randomInRange(0, 40); blockHeight = 25 + randomInRange(0, 20); newBlock = Bodies.rectangle(blockStartX, blockStartY, blockWidth, blockHeight, blockOptions); break;
+         }
         if (!newBlock.blockWidth) newBlock.blockWidth = blockWidth; if (!newBlock.blockHeight) newBlock.blockHeight = blockHeight;
-
+        newBlock.weightLabel = getWeightLabel(newBlock.density);
         currentBlock = newBlock; Composite.add(world, currentBlock);
-        console.log(`Prepared ${shapeType} (Density: ${density.toFixed(3)}). Timer started.`);
+        console.log(`Prepared ${shapeType} (${newBlock.weightLabel}, Density: ${newBlock.density.toFixed(3)}). Timer started.`);
         scheduleNextAutoDrop();
     }
 
-    // --- Auto Drop Logic ---
-    function forceDropCurrentBlock() { /* Keep existing force drop logic */ }
+    function forceDropCurrentBlock() {
+         if (currentBlock && currentBlock.isStatic) {
+            console.log("Auto-dropping block!"); if (draggedBlock === currentBlock) { draggedBlock = null; }
+            currentBlock.label = 'block'; currentBlock.isSettling = true; Body.setStatic(currentBlock, false); currentBlock = null;
+        } autoDropTimeoutId = null;
+    }
     function scheduleNextAutoDrop() {
          if (autoDropTimeoutId) { clearTimeout(autoDropTimeoutId); }
-         if (currentBlock && currentBlock.isStatic && !isGameOver && !levelCleared) {
-             autoDropTimeoutId = setTimeout(forceDropCurrentBlock, autoDropIntervalMs);
-         } else { autoDropTimeoutId = null; }
+         if (currentBlock && currentBlock.isStatic && !isGameOver && !levelCleared) { autoDropTimeoutId = setTimeout(forceDropCurrentBlock, autoDropIntervalMs); }
+         else { autoDropTimeoutId = null; }
     }
 
-    // --- Wind Logic ---
     function updateWind() {
         if (isGameOver || levelCleared) return;
-        if (Math.random() < 0.65) { windForceX = randomInRange(-maxWindForce, maxWindForce); }
-        else { windForceX = 0; }
-        // Schedule next update
+        if (Math.random() < 0.65) { windForceX = randomInRange(-maxWindForce, maxWindForce); } else { windForceX = 0; }
         scheduleNextWindUpdate();
     }
     function scheduleNextWindUpdate() {
-         if (windUpdateTimeoutId) clearTimeout(windUpdateTimeoutId); // Clear previous timer if exists
-         const nextWindUpdateDelay = randomInRange(3000, 8000); // Shorter max delay
+         if (windUpdateTimeoutId) clearTimeout(windUpdateTimeoutId);
+         const nextWindUpdateDelay = randomInRange(3000, 8000);
          windUpdateTimeoutId = setTimeout(updateWind, nextWindUpdateDelay);
     }
 
-    // --- Mouse Control Setup & Events ---
     const mouse = Mouse.create(render.canvas);
-    const mouseConstraint = MouseConstraint.create(engine, { /* Options */ }); // (Keep existing setup)
+    const mouseConstraint = MouseConstraint.create(engine, { mouse: mouse, constraint: { stiffness: 0.1, render: { visible: false } } });
     Composite.add(world, mouseConstraint);
-    Events.on(mouseConstraint, 'mousedown', (event) => { /* Keep existing mousedown logic */ });
-    Events.on(mouseConstraint, 'mouseup', (event) => { /* Keep existing mouseup logic */ });
 
+    Events.on(mouseConstraint, 'mousedown', (event) => {
+        if (isGameOver || levelCleared) return; const mousePos = event.mouse.position;
+        const bodiesUnderMouse = Query.point(Composite.allBodies(world), mousePos);
+        let clickedBody = null; let foundNextBlock = false;
+        for (const body of bodiesUnderMouse) { if (body.label === 'nextBlock' && body === currentBlock) { clickedBody = body; foundNextBlock = true; break; } }
+        if (!foundNextBlock && bodiesUnderMouse.length > 0) {
+             for (const body of bodiesUnderMouse) { if (body.label === 'block' && !body.isStatic && !body.isSettling && Math.abs(windForceX) >= strongWindThreshold) { clickedBody = body; break; } }
+        }
+        if (clickedBody) {
+            if (clickedBody.label === 'nextBlock') { draggedBlock = clickedBody; if (autoDropTimeoutId) { clearTimeout(autoDropTimeoutId); autoDropTimeoutId = null; } console.log("Dragging next block, auto-drop cancelled."); }
+            else if (clickedBody.label === 'block') { heldBlock = clickedBody; Body.setStatic(heldBlock, true); heldBlock.render.opacity = 0.5; console.log("Holding block against strong wind!"); }
+        }
+    });
+    Events.on(mouseConstraint, 'mouseup', (event) => {
+         if (isGameOver || levelCleared) { if (heldBlock) { heldBlock.render.opacity = 1.0; heldBlock = null; } draggedBlock = null; return; }
+        if (draggedBlock) {
+            console.log("Player released block for dropping"); if (autoDropTimeoutId) { clearTimeout(autoDropTimeoutId); autoDropTimeoutId = null; }
+            draggedBlock.label = 'block'; draggedBlock.isSettling = true; Body.setStatic(draggedBlock, false); currentBlock = null; draggedBlock = null;
+        }
+        if (heldBlock) {
+            console.log("Released held block"); heldBlock.render.opacity = 1.0; if (!isGameOver && !levelCleared) { Body.setStatic(heldBlock, false); } heldBlock = null;
+        }
+    });
 
-    // --- Physics and Game Loop ---
     Events.on(engine, 'beforeUpdate', (event) => {
-        if (isGameOver || levelCleared) return;
-        const windIsStrong = Math.abs(windForceX) >= strongWindThreshold;
-        // Apply Wind Force
+        if (isGameOver || levelCleared) return; const windIsStrong = Math.abs(windForceX) >= strongWindThreshold;
         if (Math.abs(windForceX) > 0.0001) {
             const bodies = Composite.allBodies(world);
             for (let i = 0; i < bodies.length; i++) { const body = bodies[i];
-                if (!body.isStatic && body.label !== 'ground' && body !== heldBlock && body !== currentBlock) {
-                     Body.applyForce(body, body.position, { x: windForceX, y: 0 });
-                }
+                if (!body.isStatic && body.label !== 'ground' && body !== heldBlock && body !== currentBlock) { Body.applyForce(body, body.position, { x: windForceX, y: 0 }); }
             }
-        }
-        // Check for breaking glue
-        checkAndBreakGlue(windIsStrong);
+        } checkAndBreakGlue(windIsStrong);
     });
 
     Events.on(engine, 'afterUpdate', (event) => {
-         if (levelCleared) { displayInfo(); updateAndDrawParticles(render.context); return; } // Draw particles during clear
-         if (isGameOver) { /* Keep existing Game Over logic */ displayInfo(); updateAndDrawParticles(render.context); return; } // Draw particles on game over
-
-        const bodies = Composite.allBodies(world);
-        let blockHasSettledThisFrame = false;
-        let currentHighestY = canvasHeight;
-
+         if (levelCleared) { displayInfo(); updateAndDrawParticles(render.context); return; }
+         if (isGameOver) { if (runner.enabled) { Runner.stop(runner); } displayInfo(); updateAndDrawParticles(render.context); return; }
+        const bodies = Composite.allBodies(world); let blockHasSettledThisFrame = false; let currentHighestY = canvasHeight;
+        const bodiesToRemoveThisFrame = []; const allowedFallenBlocks = 1 + Math.floor(score / 10);
         for (let i = 0; i < bodies.length; i++) {
-            const body = bodies[i];
-            if (body.isStatic || body.label === 'ground') { /* Update currentHighestY */ continue; } // (Keep existing logic)
-            // --- Game Over Check ---
+            const body = bodies[i]; if (body.isStatic || body.label === 'ground') { if(body.label !== 'ground') currentHighestY = Math.min(currentHighestY, body.position.y - (body.blockHeight || 30) / 2); continue; }
             const isOffBottom = body.position.y > canvasHeight + 50; const isOffSides = Math.abs(body.position.x - canvasWidth / 2) > canvasWidth / 2 + 100;
-            if (body.label === 'block' && (isOffBottom || isOffSides)) { /* Set isGameOver = true */ break; } // (Keep existing logic)
-            // --- Track Highest Point ---
+            if (body.label === 'block' && (isOffBottom || isOffSides)) {
+                if (!bodiesToRemoveThisFrame.includes(body)) {
+                    blocksFallenThisLevel++; console.log(`Block fell off! (${blocksFallenThisLevel}/${allowedFallenBlocks})`); bodiesToRemoveThisFrame.push(body);
+                    if (blocksFallenThisLevel >= allowedFallenBlocks) {
+                        console.log("Game Over - Too many blocks fell!"); isGameOver = true;
+                        if (heldBlock) { heldBlock.render.opacity = 1.0; heldBlock = null; } if (autoDropTimeoutId) { clearTimeout(autoDropTimeoutId); autoDropTimeoutId = null; }
+                        // Game over flag set, runner will be stopped check at start of next afterUpdate
+                    }
+                } continue; // Don't process landing for a fallen block
+            }
             currentHighestY = Math.min(currentHighestY, body.position.y - (body.blockHeight || 30) / 2);
-            // --- Landing / Goal / Glue Check ---
             if (body.isSettling) {
-                const speed = body.speed; const angularSpeed = body.angularSpeed;
-                const speedThreshold = 0.1; const angularSpeedThreshold = 0.05;
-                if (speed < speedThreshold && angularSpeed < angularSpeedThreshold) { body.settleTimer = (body.settleTimer || 0) + 1; }
-                else { body.settleTimer = 0; }
+                const speed = body.speed; const angularSpeed = body.angularSpeed; const speedThreshold = 0.1; const angularSpeedThreshold = 0.05;
+                if (speed < speedThreshold && angularSpeed < angularSpeedThreshold) { body.settleTimer = (body.settleTimer || 0) + 1; } else { body.settleTimer = 0; }
                 const settleFramesRequired = 30;
                 if (body.settleTimer >= settleFramesRequired) {
-                    const settleSpeedBonus = Math.max(0, settleFramesRequired - body.settleTimer); // Bonus for faster settle
-                    body.isSettling = false; body.settleTimer = 0;
-                    createParticles(body.position.x, body.position.y, getRandomElement(blockColors), 15, 2); // Landing particles
-
-                    if (!blockHasSettledThisFrame && !currentBlock && !draggedBlock && !levelCleared) {
-                        score++;
-                        if (settleSpeedBonus > 20) { // Award bonus for very fast settle
-                             score += 5;
-                             console.log("Fast settle bonus! +5");
-                             // Add score bonus text effect? (optional)
-                         }
-                        console.log("Block landed! Score:", score);
-                        const blockTopY = body.position.y - (body.blockHeight || 30) / 2;
-                        highestBlockY = Math.min(highestBlockY, blockTopY);
-
-                        // --- Glue Trigger Check ---
-                        if (score > 0 && score % glueTriggerScore === 0 && score !== lastGlueScore) {
-                             applyGlue();
-                             lastGlueScore = score;
-                        }
-
-                        // --- Goal Check ---
-                        if (blockTopY <= targetHeightY) {
-                             console.log("Target height reached!"); resetLevel();
-                             blockHasSettledThisFrame = true; break;
-                         } else {
-                             prepareNextBlock(); blockHasSettledThisFrame = true;
-                         }
+                    const settleTime = body.settleTimer || settleFramesRequired; body.isSettling = false; body.settleTimer = 0;
+                    createParticles(body.position.x, body.position.y, getRandomElement(blockColors), 15, 2);
+                    if (!blockHasSettledThisFrame && !currentBlock && !draggedBlock && !levelCleared && !isGameOver) {
+                        score++; if (settleTime < settleFramesRequired + 5) { score += 5; console.log("Fast settle bonus! +5"); }
+                        console.log("Block landed! Score:", score); const blockTopY = body.position.y - (body.blockHeight || 30) / 2; highestBlockY = Math.min(highestBlockY, blockTopY);
+                        if (isGlueTriggerScore(score) && score !== lastGlueScore) { applyGlue(); lastGlueScore = score; }
+                        if (blockTopY <= targetHeightY) { console.log("Target height reached!"); resetLevel(); blockHasSettledThisFrame = true; }
+                        else { prepareNextBlock(); blockHasSettledThisFrame = true; }
                     }
                 }
             }
         } // End of body loop
-        if (!blockHasSettledThisFrame) { highestBlockY = Math.min(highestBlockY, currentHighestY); }
-        updateSkyColor(); displayInfo(); updateAndDrawParticles(render.context); // Draw particles last
+        if (bodiesToRemoveThisFrame.length > 0) { bodiesToRemoveThisFrame.forEach(body => Composite.remove(world, body)); }
+        if (!blockHasSettledThisFrame && !levelCleared && !isGameOver) { highestBlockY = Math.min(highestBlockY, currentHighestY); }
+        updateSkyColor(); displayInfo(); updateAndDrawParticles(render.context);
     });
 
-    // --- Draw Target Line & Particles ---
      Events.on(render, 'afterRender', (event) => {
-         // Draw Target Line (Keep existing logic)
-         // Update and Draw Particles is now called in afterUpdate to ensure it's drawn over game elements
+        const ctx = render.context;
+        if (!isGameOver && !levelCleared) {
+            ctx.beginPath(); ctx.setLineDash([10, 10]); ctx.moveTo(0, targetHeightY); ctx.lineTo(canvasWidth, targetHeightY);
+            ctx.strokeStyle = 'rgba(255, 0, 0, 0.7)'; ctx.lineWidth = 2; ctx.stroke(); ctx.setLineDash([]); ctx.lineWidth = 1;
+        }
+        const bodies = Composite.allBodies(world); ctx.fillStyle = 'white'; ctx.font = '12px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        bodies.forEach(body => {
+             if ((body.label === 'block' || body.label === 'nextBlock') && body.weightLabel) {
+                 ctx.save(); ctx.translate(body.position.x, body.position.y); ctx.rotate(body.angle);
+                 ctx.fillStyle = 'rgba(0,0,0,0.6)'; // Semi-transparent black background for text
+                 const textWidth = ctx.measureText(body.weightLabel).width;
+                 ctx.fillRect(-textWidth/2 - 2, -8, textWidth + 4, 16); // Small background rectangle
+                 ctx.fillStyle = 'white'; // Text color
+                 ctx.fillText(body.weightLabel, 0, 0); ctx.restore();
+             }
+        });
+        updateAndDrawParticles(ctx); // Moved particle drawing here to be on top
      });
 
-    // --- Initialize ---
     Render.run(render); const runner = Runner.create(); Runner.run(runner, engine);
-    scheduleNextWindUpdate(); // Use the scheduled update
-    prepareNextBlock();
-    console.log("Stack Forever: Glue activates every 10 points! Difficulty scales. Bonus for fast drops.");
+    scheduleNextWindUpdate(); prepareNextBlock();
+    console.log("Stack Forever: Weight displayed! Glue at 4,6,8,12... Tiered game over active.");
 }
