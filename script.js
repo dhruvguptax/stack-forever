@@ -1,122 +1,126 @@
-window.onload = () => {
-  const canvas = document.getElementById("gameCanvas");
-  const ctx = canvas.getContext("2d");
+if (typeof Matter === 'undefined') {
+    alert('Error: Matter.js library not loaded. Check the script tag in index.html.');
+} else {
+    console.log("Matter.js loaded successfully!");
 
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+    const Engine = Matter.Engine,
+          Render = Matter.Render,
+          Runner = Matter.Runner,
+          Bodies = Matter.Bodies,
+          Composite = Matter.Composite,
+          Events = Matter.Events,
+          Mouse = Matter.Mouse,
+          Body = Matter.Body,
+          MouseConstraint = Matter.MouseConstraint;
 
-  let blocks = [];
-  let gravity = 0.5;
-  let wind = 0;
-  let score = 0;
-  let skyColor = "#87CEEB"; // Light blue sky
-  let windStrength = 0;
+    const canvasWidth = window.innerWidth;
+    const canvasHeight = window.innerHeight;
 
-  // Function to randomly change the wind strength
-  function randomizeWind() {
-    windStrength = (Math.random() - 0.5) * 2; // Wind between -1 and 1
-  }
+    const engine = Engine.create();
+    const world = engine.world;
+    engine.world.gravity.y = 1;
 
-  // Function to change the sky color as the tower gets higher
-  function changeSkyColor() {
-    if (score < 5) {
-      skyColor = "#87CEEB"; // Light blue sky
-    } else if (score < 10) {
-      skyColor = "#FFD700"; // Golden sky
-    } else if (score < 20) {
-      skyColor = "#FF4500"; // Red sky
-    } else {
-      skyColor = "#800080"; // Purple sky
-    }
-  }
-
-  class Block {
-    constructor(x, y, w, h, color = "tomato") {
-      this.x = x;
-      this.y = y;
-      this.w = w;
-      this.h = h;
-      this.vy = 0;
-      this.vx = 0;
-      this.color = color;
-      this.landed = false;
-    }
-
-    update() {
-      if (!this.landed) {
-        this.vy += gravity;
-        this.vx += windStrength;
-        this.y += this.vy;
-        this.x += this.vx;
-
-        const last = blocks[blocks.length - 2];
-        if (last && this.y + this.h >= last.y) {
-          this.y = last.y - this.h;
-          this.vy = 0;
-          this.vx = 0;
-          this.landed = true;
-          score++;
+    const render = Render.create({
+        element: document.body,
+        engine: engine,
+        options: {
+            width: canvasWidth,
+            height: canvasHeight,
+            wireframes: false,
+            background: '#87CEEB'
         }
-      }
+    });
 
-      ctx.fillStyle = this.color;
-      ctx.fillRect(this.x, this.y, this.w, this.h);
+    const ground = Bodies.rectangle(canvasWidth / 2, canvasHeight - 25, canvasWidth, 50, {
+        isStatic: true,
+        render: {
+            fillStyle: 'steelblue'
+        }
+    });
+
+    Composite.add(world, [ground]);
+
+    let score = 0;
+    let currentBlock = null;
+    let isBlockDropping = false;
+    let blockStartX = canvasWidth / 2;
+    const blockStartY = 50;
+    const blockWidth = 100;
+    const blockHeight = 30;
+    let skyColor = '#87CEEB';
+    let towerHeight = 0;
+    const horizontalMoveSpeed = 5;
+
+    function prepareNextBlock() {
+        blockStartX = canvasWidth / 2;
+        const blockOptions = {
+            friction: 0.7,
+            restitution: 0.1,
+            density: 0.005,
+            isStatic: true
+        };
+
+        currentBlock = Bodies.rectangle(
+            blockStartX,
+            blockStartY,
+            blockWidth,
+            blockHeight,
+            blockOptions
+        );
+
+        Composite.add(world, currentBlock);
+        isBlockDropping = false;
+        console.log("Prepared next block. Use arrows to move, Space to drop.");
     }
-  }
 
-  // Display Score on the screen
-  function displayScore() {
-    ctx.fillStyle = "black";
-    ctx.font = "30px Arial";
-    ctx.fillText("Score: " + score, 20, 40);
-  }
-
-  // Drop a new block
-  function dropBlock() {
-    const w = 100;
-    const h = 30;
-    const x = canvas.width / 2 - w / 2;
-    const y = 0;
-    const color = getRandomColor(); // Random color for each block
-    blocks.push(new Block(x, y, w, h, color));
-  }
-
-  // Generate random color for blocks
-  function getRandomColor() {
-    const colors = ["#FF5733", "#33FF57", "#3357FF", "#FF33A1", "#FFFF33"];
-    return colors[Math.floor(Math.random() * colors.length)];
-  }
-
-  function gameLoop() {
-    ctx.fillStyle = skyColor; // Set the sky color
-    ctx.fillRect(0, 0, canvas.width, canvas.height); // Draw the background
-
-    // Update blocks
-    for (let b of blocks) {
-      b.update();
+    function dropCurrentBlock() {
+        if (currentBlock && currentBlock.isStatic) {
+            Matter.Body.setStatic(currentBlock, false);
+            isBlockDropping = true;
+            currentBlock = null;
+            console.log("Dropped block.");
+        }
     }
 
-    displayScore(); // Display the score
+    document.addEventListener('keydown', (event) => {
+        if (!isBlockDropping && currentBlock && currentBlock.isStatic) {
+            if (event.code === 'ArrowLeft') {
+                blockStartX -= horizontalMoveSpeed;
+                if (blockStartX - blockWidth / 2 < 0) {
+                     blockStartX = blockWidth / 2;
+                }
+                 Matter.Body.setPosition(currentBlock, { x: blockStartX, y: blockStartY });
+            } else if (event.code === 'ArrowRight') {
+                blockStartX += horizontalMoveSpeed;
+                 if (blockStartX + blockWidth / 2 > canvasWidth) {
+                    blockStartX = canvasWidth - blockWidth / 2;
+                 }
+                 Matter.Body.setPosition(currentBlock, { x: blockStartX, y: blockStartY });
+            }
+        }
 
-    // Request animation frame to keep the game running
-    requestAnimationFrame(gameLoop);
-  }
+        if (event.code === 'Space') {
+            if (currentBlock && currentBlock.isStatic) {
+                 dropCurrentBlock();
+             } else if (!currentBlock && !isBlockDropping) {
+                 prepareNextBlock();
+             }
+        }
+    });
 
-  // Initial ground block
-  blocks.push(new Block(canvas.width / 2 - 50, canvas.height - 50, 100, 30, "steelblue"));
+    Events.on(engine, 'beforeUpdate', (event) => {
 
-  // Drop a new block when spacebar is pressed
-  document.addEventListener("keydown", (e) => {
-    if (e.code === "Space") {
-      dropBlock();
-    }
-  });
+    });
 
-  // Randomize wind every 3 seconds
-  setInterval(randomizeWind, 3000);
+    Events.on(engine, 'afterUpdate', (event) => {
 
-  // Change the sky color based on score every 1 second
-  setInterval(changeSkyColor, 1000);
+    });
 
-  gameLoop(); // Start the game loop
-};
+    Render.run(render);
+    const runner = Runner.create();
+    Runner.run(runner, engine);
+
+    prepareNextBlock();
+
+    console.log("Stack Forever game setup complete. Control the block and press Space!");
+}
