@@ -1,7 +1,7 @@
 if (typeof Matter === 'undefined') {
     alert('Error: Matter.js library not loaded. Check the script tag in index.html.');
 } else {
-    console.log("Stack Forever: Loading script...");
+    console.log("Stack Forever: Loading script (Normal Drop Speed)...");
 
     const Engine = Matter.Engine, Render = Matter.Render, Runner = Matter.Runner,
           Bodies = Matter.Bodies, Body = Matter.Body, Composite = Matter.Composite,
@@ -14,7 +14,7 @@ if (typeof Matter === 'undefined') {
 
     const engine = Engine.create();
     const world = engine.world;
-    engine.world.gravity.y = 1.5;
+    engine.world.gravity.y = 1; // *** Back to standard gravity ***
 
     const render = Render.create({
         element: document.body,
@@ -44,10 +44,10 @@ if (typeof Matter === 'undefined') {
     const blockColors = ["#FF5733", "#33FF57", "#3357FF", "#FF33A1", "#FFFF33", "#FF8C00", "#DA70D6", "#00CED1"];
     const shapeTypes = ['rectangle', 'circle', 'small_rectangle', 'wide_rectangle'];
 
-    let autoDropIntervalMs = 1000; // Spawn new block every 1 second
+    let autoDropIntervalMs = 1000; // Still spawn every 1 second
     const minDropIntervalMs = 500;
     const maxAllowableWindForce = 0.030;
-    const initialDropSpeed = 25;
+    // const initialDropSpeed = 25; // Removed - no longer boosting speed
     let autoDropTimeoutId = null;
     let windUpdateTimeoutId = null;
 
@@ -59,19 +59,13 @@ if (typeof Matter === 'undefined') {
     function getRandomElement(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
     function randomInRange(min, max) { return Math.random() * (max - min) + min; }
     function distance(posA, posB) { const dx = posA.x - posB.x; const dy = posA.y - posB.y; return Math.sqrt(dx * dx + dy * dy); }
-
     function getNumericWeight(body) {
-        // Robust check for valid density and area before calculation
         const density = (typeof body.density === 'number' && isFinite(body.density)) ? body.density : 0.005;
-        const area = (typeof body.area === 'number' && isFinite(body.area) && body.area > 0) ? body.area : 500; // Use default area if invalid
-        const factor = 8; // Adjust for desired weight range
+        const area = (typeof body.area === 'number' && isFinite(body.area) && body.area > 0) ? body.area : 500;
+        const factor = 8;
         const weight = Math.round(density * area * factor);
-
-        if (!isFinite(weight) || weight <= 0) {
-             console.error("Invalid weight calculated! Inputs:", body.density, body.area, "Result:", weight);
-             return 1; // Default to 1 if calculation failed
-        }
-        return Math.max(1, weight); // Ensure weight is at least 1
+        if (!isFinite(weight) || weight <= 0) { console.error("Invalid weight calculated! Inputs:", body.density, body.area, "Result:", weight); return 1; }
+        return Math.max(1, weight);
     }
 
     function createParticles(x, y, pColor, count, intensity, dirY = -1) { for (let i = 0; i < count; i++) { particles.push({ x: x, y: y, vx: randomInRange(-intensity, intensity), vy: randomInRange(intensity * 1.5 * dirY, intensity * 0.5 * dirY), life: randomInRange(20, 40), radius: randomInRange(1, 3), color: pColor || 'rgba(255, 255, 255, 0.7)' }); } }
@@ -86,11 +80,8 @@ if (typeof Matter === 'undefined') {
     function resetLevel() { console.log("Resetting level..."); levelCleared = true; if (autoDropTimeoutId) clearTimeout(autoDropTimeoutId); const bodiesToRemove = Composite.allBodies(world).filter(body => body.label !== 'ground'); bodiesToRemove.forEach(body => Composite.remove(world, body)); const constraintsToRemove = Composite.allConstraints(world).filter(c => c.label === 'glue'); constraintsToRemove.forEach(c => Composite.remove(world, c)); autoDropIntervalMs = Math.max(minDropIntervalMs, autoDropIntervalMs * 0.97); maxWindForce = Math.min(maxAllowableWindForce, maxWindForce * 1.05); console.log(`New Drop Interval: ${autoDropIntervalMs}ms, Max Wind: ${maxWindForce.toFixed(4)}`); score = 0; lastGlueScore = -1; blocksFallenThisLevel = 0; currentBlock = null; heldBlock = null; draggedBlock = null; highestBlockY = canvasHeight; render.options.background = '#87CEEB'; particles = []; setTimeout(() => { levelCleared = false; if (!isGameOver) { prepareNextBlock(); } }, 500); }
 
     function prepareNextBlock() {
-        console.log("Attempting to prepare next block..."); // Diagnostic log
-        if (isGameOver || levelCleared || currentBlock) {
-            console.log("Prepare skipped:", {isGameOver, levelCleared, currentBlockExists: !!currentBlock});
-            return;
-        }
+        console.log("Attempting to prepare next block...");
+        if (isGameOver || levelCleared || currentBlock) { console.log("Prepare skipped:", {isGameOver, levelCleared, currentBlockExists: !!currentBlock}); return; }
 
         score++;
         console.log(`Score: ${score}`);
@@ -108,59 +99,49 @@ if (typeof Matter === 'undefined') {
              case 'small_rectangle': blockWidth = 40 + randomInRange(0, 30); blockHeight = 20 + randomInRange(0, 20); newBlock = Bodies.rectangle(blockStartX, blockStartY, blockWidth, blockHeight, blockOptions); break;
              case 'wide_rectangle': blockWidth = 100 + randomInRange(0, 50); blockHeight = 15 + randomInRange(0, 10); newBlock = Bodies.rectangle(blockStartX, blockStartY, blockWidth, blockHeight, blockOptions); break;
              case 'rectangle': default: blockWidth = 60 + randomInRange(0, 40); blockHeight = 25 + randomInRange(0, 20); newBlock = Bodies.rectangle(blockStartX, blockStartY, blockWidth, blockHeight, blockOptions); break;
-        }
+         }
         if (!newBlock.blockWidth) newBlock.blockWidth = blockWidth; if (!newBlock.blockHeight) newBlock.blockHeight = blockHeight;
-        // Ensure area is calculated by Matter.js before getting weight
-        Body.set(newBlock, "area", newBlock.area); // Force update if needed? Usually automatic.
-        newBlock.numericWeight = getNumericWeight(newBlock);
+        // Ensure area is available for weight calculation
+        Body.set(newBlock, "area", newBlock.area); // Recalculate area if needed? Usually automatic.
+        newBlock.numericWeight = getNumericWeight(newBlock); // Calculate weight here
 
-        currentBlock = newBlock;
-        Composite.add(world, currentBlock);
+        currentBlock = newBlock; Composite.add(world, currentBlock);
         console.log(`Prepared ${shapeType} (${specialType}, Weight: ${newBlock.numericWeight}). Scheduling drop timer.`);
-        scheduleNextAutoDrop(); // *** SCHEDULE THE TIMER HERE ***
+        scheduleNextAutoDrop();
     }
 
-    function startFastDrop(block) {
-        if (!block || !Composite.get(world, block.id, 'body')) { // Check if block exists in world
-            console.warn("Attempted to drop block that doesn't exist or isn't in world.");
-            return;
-        }
-        console.log("Starting fast drop for block ID:", block.id);
-        createParticles(block.position.x, block.position.y + 15, '#FFFFFF', 10, 1, 1);
-        block.label = 'block';
-        block.isSettling = true; // Mark for landing checks
-        Body.setStatic(block, false);
-        Body.setVelocity(block, { x: 0, y: initialDropSpeed });
-        // Body.setAngularVelocity(block, randomInRange(-0.05, 0.05)); // Optional small spin
-
-        currentBlock = null; // Block is no longer waiting
-
-        // Prepare the next block immediately after starting the drop
-        console.log("Requesting prepareNextBlock after starting drop...");
-        prepareNextBlock();
-    }
+    // Removed startFastDrop function
 
     function forceDropCurrentBlock() {
-        console.log("forceDropCurrentBlock called"); // Diagnostic log
-        const blockToDrop = currentBlock; // Reference before nulling
+        console.log("forceDropCurrentBlock called");
+        const blockToDrop = currentBlock;
         if (blockToDrop && blockToDrop.isStatic) {
             console.log("Auto-dropping block ID:", blockToDrop.id);
             if (draggedBlock === blockToDrop) { draggedBlock = null; }
-            startFastDrop(blockToDrop);
+
+            // Directly make the block dynamic - standard gravity drop
+            blockToDrop.label = 'block';
+            blockToDrop.isSettling = true;
+            Body.setStatic(blockToDrop, false);
+            // Body.setAngularVelocity(blockToDrop, randomInRange(-0.05, 0.05)); // Optional spin
+
+            currentBlock = null; // Block is no longer waiting
+
+            // Prepare the next block immediately
+            prepareNextBlock();
+
         } else {
             console.log("Auto-drop skipped: No static currentBlock found.");
-            // If no block was dropped, we still need to ensure the cycle continues
-            if (!currentBlock && !isGameOver && !levelCleared) {
-                prepareNextBlock();
-            }
+            // If no block was dropped, ensure the cycle continues
+             if (!currentBlock && !isGameOver && !levelCleared) {
+                 prepareNextBlock();
+             }
         }
-        autoDropTimeoutId = null; // Clear ID as timer executed
-        // *** DO NOT re-schedule timer here - prepareNextBlock handles it ***
+        autoDropTimeoutId = null; // Timer executed
     }
 
     function scheduleNextAutoDrop() {
         if (autoDropTimeoutId) { clearTimeout(autoDropTimeoutId); }
-        // Schedule drop ONLY if a static block is waiting and game active
         if (currentBlock && currentBlock.isStatic && !isGameOver && !levelCleared) {
              console.log("Scheduling auto-drop for block ID:", currentBlock.id, "in", autoDropIntervalMs, "ms");
              autoDropTimeoutId = setTimeout(forceDropCurrentBlock, autoDropIntervalMs);
@@ -174,26 +155,24 @@ if (typeof Matter === 'undefined') {
     function scheduleNextWindUpdate() { if (windUpdateTimeoutId) clearTimeout(windUpdateTimeoutId); const nextWindUpdateDelay = randomInRange(3000, 8000); windUpdateTimeoutId = setTimeout(updateWind, nextWindUpdateDelay); }
 
     const mouse = Mouse.create(render.canvas); const mouseConstraint = MouseConstraint.create(engine, { mouse: mouse, constraint: { stiffness: 0.1, render: { visible: false } } }); Composite.add(world, mouseConstraint);
-    Events.on(mouseConstraint, 'mousedown', (event) => {
-        if (isGameOver || levelCleared) return; const mousePos = event.mouse.position;
-        const bodiesUnderMouse = Query.point(Composite.allBodies(world), mousePos); let clickedBody = null; let foundNextBlock = false;
-        for (const body of bodiesUnderMouse) { if (body.label === 'nextBlock' && body === currentBlock) { clickedBody = body; foundNextBlock = true; break; } }
-        if (!foundNextBlock && bodiesUnderMouse.length > 0) { for (const body of bodiesUnderMouse) { if (body.label === 'block' && !body.isStatic && !body.isSettling && Math.abs(windForceX) >= strongWindThreshold) { clickedBody = body; break; } } }
-        if (clickedBody) {
-            if (clickedBody.label === 'nextBlock') {
-                draggedBlock = clickedBody; if (autoDropTimeoutId) { clearTimeout(autoDropTimeoutId); autoDropTimeoutId = null; } console.log("Dragging next block, auto-drop cancelled.");
-            } else if (clickedBody.label === 'block') {
-                heldBlock = clickedBody; Body.setStatic(heldBlock, true); heldBlock.render.opacity = 0.5; console.log("Holding block against strong wind!");
-            }
-        }
-    });
+    Events.on(mouseConstraint, 'mousedown', (event) => { if (isGameOver || levelCleared) return; const mousePos = event.mouse.position; const bodiesUnderMouse = Query.point(Composite.allBodies(world), mousePos); let clickedBody = null; let foundNextBlock = false; for (const body of bodiesUnderMouse) { if (body.label === 'nextBlock' && body === currentBlock) { clickedBody = body; foundNextBlock = true; break; } } if (!foundNextBlock && bodiesUnderMouse.length > 0) { for (const body of bodiesUnderMouse) { if (body.label === 'block' && !body.isStatic && !body.isSettling && Math.abs(windForceX) >= strongWindThreshold) { clickedBody = body; break; } } } if (clickedBody) { if (clickedBody.label === 'nextBlock') { draggedBlock = clickedBody; if (autoDropTimeoutId) { clearTimeout(autoDropTimeoutId); autoDropTimeoutId = null; } console.log("Dragging next block, auto-drop cancelled."); } else if (clickedBody.label === 'block') { heldBlock = clickedBody; Body.setStatic(heldBlock, true); heldBlock.render.opacity = 0.5; console.log("Holding block against strong wind!"); } } });
     Events.on(mouseConstraint, 'mouseup', (event) => {
         if (isGameOver || levelCleared) { if (heldBlock) { heldBlock.render.opacity = 1.0; heldBlock = null; } draggedBlock = null; return; }
         if (draggedBlock) {
             console.log("Player released block for dropping ID:", draggedBlock.id); if (autoDropTimeoutId) { clearTimeout(autoDropTimeoutId); autoDropTimeoutId = null; }
-            const blockToDrop = draggedBlock; // Keep reference
-            draggedBlock = null; // Clear drag state *before* starting drop
-            startFastDrop(blockToDrop);
+            const blockToDrop = draggedBlock;
+            draggedBlock = null;
+
+            // Directly make the block dynamic - standard gravity drop
+            blockToDrop.label = 'block';
+            blockToDrop.isSettling = true;
+            Body.setStatic(blockToDrop, false);
+            // Body.setAngularVelocity(blockToDrop, randomInRange(-0.05, 0.05)); // Optional spin
+
+            currentBlock = null; // Block is no longer waiting
+
+            // Prepare the next block immediately
+            prepareNextBlock();
         }
         if (heldBlock) { console.log("Released held block"); heldBlock.render.opacity = 1.0; if (!isGameOver && !levelCleared) { Body.setStatic(heldBlock, false); } heldBlock = null; }
     });
@@ -216,18 +195,19 @@ if (typeof Matter === 'undefined') {
             }
             if(body.blockHeight) currentHighestY = Math.min(currentHighestY, body.position.y - body.blockHeight / 2);
             if (body.isSettling) {
-                const speed = body.speed; const angularSpeed = body.angularSpeed; const speedThreshold = 0.2; const angularSpeedThreshold = 0.1;
+                const speed = body.speed; const angularSpeed = body.angularSpeed; const speedThreshold = 0.1; const angularSpeedThreshold = 0.05; // Adjusted thresholds back maybe
                 if (speed < speedThreshold && angularSpeed < angularSpeedThreshold) { body.settleTimer = (body.settleTimer || 0) + 1; } else { body.settleTimer = 0; }
-                const settleFramesRequired = 20;
+                const settleFramesRequired = 30; // Back to standard settle time
                 if (body.settleTimer >= settleFramesRequired) {
                     const settleTime = body.settleTimer || settleFramesRequired; body.isSettling = false; body.settleTimer = 0;
                     createParticles(body.position.x, body.position.y, getRandomElement(blockColors), 15, 2);
                     if (!blockHasSettledThisFrame && !currentBlock && !draggedBlock && !levelCleared && !isGameOver) {
                         console.log("Block landed!"); const blockTopY = body.position.y - (body.blockHeight || 30) / 2; highestBlockY = Math.min(highestBlockY, blockTopY);
-                        // Check glue trigger using score (which increments on spawn)
+                        // Glue check (use score which increments on spawn)
                         if (score > 0 && score % glueTriggerScore === 0 && score !== lastGlueScore) { applyGlue(); lastGlueScore = score; }
+                        // Goal check
                         if (blockTopY <= targetHeightY) { console.log("Target height reached!"); resetLevel(); blockHasSettledThisFrame = true; }
-                        else { blockHasSettledThisFrame = true; } // Mark settle, but next block prep is handled by timer/drop now
+                        else { blockHasSettledThisFrame = true; } // Mark settle, next block already handled by drop logic
                     }
                 }
             }
@@ -247,9 +227,8 @@ if (typeof Matter === 'undefined') {
         ctx.font = '11px Arial Black'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         bodies.forEach(body => {
              if ((body.label === 'block' || body.label === 'nextBlock') && body.numericWeight && body.render.visible) {
-                 ctx.fillStyle = 'white';
-                 // Ensure numericWeight is a valid number before drawing
                  const weightText = (typeof body.numericWeight === 'number' && isFinite(body.numericWeight)) ? body.numericWeight.toString() : '?';
+                 ctx.fillStyle = 'white'; // White text
                  ctx.fillText(weightText, body.position.x, body.position.y);
              }
         });
@@ -257,6 +236,6 @@ if (typeof Matter === 'undefined') {
 
     Render.run(render); const runner = Runner.create(); Runner.run(runner, engine);
     scheduleNextWindUpdate();
-    prepareNextBlock(); // Prepare the very first block
-    console.log("Stack Forever: Final Attempt - Fast drops, Num Weight, Tiered GO, Glue@3");
-}
+    prepareNextBlock(); // Start the game
+    console.log("Stack Forever: Normal Drop Speed. Spawn@1s. Glue@3. Tiered GO. Num Weight.");
+} // End of Matter check
