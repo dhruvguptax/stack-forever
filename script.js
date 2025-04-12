@@ -2,15 +2,9 @@ window.onload = () => {
   const canvas = document.getElementById("gameCanvas");
   const ctx = canvas.getContext("2d");
 
-  // Set canvas size
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
 
-  // Test: draw a red square to confirm canvas is working
-  ctx.fillStyle = "red";
-  ctx.fillRect(100, 100, 200, 200);
-
-  // Game setup
   let blocks = [];
   let gravity = 0.5;
   let wind = 0;
@@ -59,6 +53,7 @@ window.onload = () => {
   }
 
   function gameLoop() {
+    // Optional: change background color as you go higher later
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     for (let b of blocks) {
@@ -68,15 +63,14 @@ window.onload = () => {
     requestAnimationFrame(gameLoop);
   }
 
-  // Drop first block
-  dropBlock();
+  // First ground block
+  blocks.push(new Block(canvas.width / 2 - 50, canvas.height - 50, 100, 30, "steelblue"));
 
-  // Add a ground block to land on
-  blocks.push(new Block(canvas.width / 2 - 100 / 2, canvas.height - 50, 100, 30, "steelblue"));
-
-  // Spacebar to drop blocks
+  // Drop block with spacebar
   document.addEventListener("keydown", (e) => {
-    if (e.code === "Space") dropBlock();
+    if (e.code === "Space") {
+      dropBlock();
+    }
   });
 
   gameLoop();
