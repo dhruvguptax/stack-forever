@@ -9,6 +9,26 @@ window.onload = () => {
   let gravity = 0.5;
   let wind = 0;
   let score = 0;
+  let skyColor = "#87CEEB"; // Light blue sky
+  let windStrength = 0;
+
+  // Function to randomly change the wind strength
+  function randomizeWind() {
+    windStrength = (Math.random() - 0.5) * 2; // Wind between -1 and 1
+  }
+
+  // Function to change the sky color as the tower gets higher
+  function changeSkyColor() {
+    if (score < 5) {
+      skyColor = "#87CEEB"; // Light blue sky
+    } else if (score < 10) {
+      skyColor = "#FFD700"; // Golden sky
+    } else if (score < 20) {
+      skyColor = "#FF4500"; // Red sky
+    } else {
+      skyColor = "#800080"; // Purple sky
+    }
+  }
 
   class Block {
     constructor(x, y, w, h, color = "tomato") {
@@ -25,7 +45,7 @@ window.onload = () => {
     update() {
       if (!this.landed) {
         this.vy += gravity;
-        this.vx += wind;
+        this.vx += windStrength;
         this.y += this.vy;
         this.x += this.vx;
 
@@ -44,34 +64,59 @@ window.onload = () => {
     }
   }
 
+  // Display Score on the screen
+  function displayScore() {
+    ctx.fillStyle = "black";
+    ctx.font = "30px Arial";
+    ctx.fillText("Score: " + score, 20, 40);
+  }
+
+  // Drop a new block
   function dropBlock() {
     const w = 100;
     const h = 30;
     const x = canvas.width / 2 - w / 2;
     const y = 0;
-    blocks.push(new Block(x, y, w, h));
+    const color = getRandomColor(); // Random color for each block
+    blocks.push(new Block(x, y, w, h, color));
+  }
+
+  // Generate random color for blocks
+  function getRandomColor() {
+    const colors = ["#FF5733", "#33FF57", "#3357FF", "#FF33A1", "#FFFF33"];
+    return colors[Math.floor(Math.random() * colors.length)];
   }
 
   function gameLoop() {
-    // Optional: change background color as you go higher later
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = skyColor; // Set the sky color
+    ctx.fillRect(0, 0, canvas.width, canvas.height); // Draw the background
 
+    // Update blocks
     for (let b of blocks) {
       b.update();
     }
 
+    displayScore(); // Display the score
+
+    // Request animation frame to keep the game running
     requestAnimationFrame(gameLoop);
   }
 
-  // First ground block
+  // Initial ground block
   blocks.push(new Block(canvas.width / 2 - 50, canvas.height - 50, 100, 30, "steelblue"));
 
-  // Drop block with spacebar
+  // Drop a new block when spacebar is pressed
   document.addEventListener("keydown", (e) => {
     if (e.code === "Space") {
       dropBlock();
     }
   });
 
-  gameLoop();
+  // Randomize wind every 3 seconds
+  setInterval(randomizeWind, 3000);
+
+  // Change the sky color based on score every 1 second
+  setInterval(changeSkyColor, 1000);
+
+  gameLoop(); // Start the game loop
 };
