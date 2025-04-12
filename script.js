@@ -19,12 +19,7 @@ if (typeof Matter === 'undefined') {
     const render = Render.create({
         element: document.body,
         engine: engine,
-        options: {
-            width: canvasWidth,
-            height: canvasHeight,
-            wireframes: false,
-            background: '#87CEEB'
-        }
+        options: { width: canvasWidth, height: canvasHeight, wireframes: false, background: '#87CEEB' }
     });
 
     const ground = Bodies.rectangle(canvasWidth / 2, canvasHeight - 25, canvasWidth * 2, 50, {
@@ -64,108 +59,23 @@ if (typeof Matter === 'undefined') {
     function getRandomElement(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
     function randomInRange(min, max) { return Math.random() * (max - min) + min; }
     function distance(posA, posB) { const dx = posA.x - posB.x; const dy = posA.y - posB.y; return Math.sqrt(dx * dx + dy * dy); }
-    function getWeightLabel(density) {
-        if (density <= 0.0035) return "Lgt";
-        if (density <= 0.0055) return "Med";
-        return "Hvy";
-    }
-     function isGlueTriggerScore(scoreToCheck) {
-         if (initialGlueScores.includes(scoreToCheck)) { return true; }
-         const lastInitial = initialGlueScores[initialGlueScores.length - 1];
-         if (scoreToCheck > lastInitial && (scoreToCheck - lastInitial) % subsequentGlueInterval === 0) { return true; }
-         return false;
-     }
+    function getWeightLabel(density) { if (density <= 0.0035) return "Lgt"; if (density <= 0.0055) return "Med"; return "Hvy"; }
+    function isGlueTriggerScore(scoreToCheck) { if (initialGlueScores.includes(scoreToCheck)) { return true; } const lastInitial = initialGlueScores[initialGlueScores.length - 1]; if (scoreToCheck > lastInitial && (scoreToCheck - lastInitial) % subsequentGlueInterval === 0) { return true; } return false; }
 
-    function createParticles(x, y, pColor, count, intensity) {
-        for (let i = 0; i < count; i++) {
-            particles.push({ x: x, y: y, vx: randomInRange(-intensity, intensity), vy: randomInRange(-intensity * 1.5, -intensity * 0.5), life: randomInRange(30, 60), radius: randomInRange(1, 3), color: pColor || 'rgba(255, 255, 255, 0.7)' });
-        }
-    }
-    function updateAndDrawParticles(ctx) {
-        const gravity = 0.1;
-        for (let i = particles.length - 1; i >= 0; i--) {
-            const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += gravity; p.life--;
-            if (p.life <= 0) { particles.splice(i, 1); continue; }
-            ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2); ctx.fill();
-        }
-    }
+    function createParticles(x, y, pColor, count, intensity) { for (let i = 0; i < count; i++) { particles.push({ x: x, y: y, vx: randomInRange(-intensity, intensity), vy: randomInRange(-intensity * 1.5, -intensity * 0.5), life: randomInRange(30, 60), radius: randomInRange(1, 3), color: pColor || 'rgba(255, 255, 255, 0.7)' }); } }
+    function updateAndDrawParticles(ctx) { const gravity = 0.1; for (let i = particles.length - 1; i >= 0; i--) { const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += gravity; p.life--; if (p.life <= 0) { particles.splice(i, 1); continue; } ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2); ctx.fill(); } }
 
-    function displayInfo() {
-        const ctx = render.context; ctx.fillStyle = "black"; ctx.font = "24px Arial"; ctx.textAlign = "left";
-        ctx.fillText("Score: " + score, 20, 40);
-        let windDisplay = "Wind: "; const absWind = Math.abs(windForceX);
-        if (absWind < 0.0001) { windDisplay += "Calm"; } else {
-             windDisplay += `${windForceX > 0 ? '>>' : '<<'} (${(absWind * 1000).toFixed(1)})`;
-             if (absWind >= strongWindThreshold) { windDisplay += " STRONG!"; ctx.fillStyle = "red"; }
-        }
-        ctx.fillText(windDisplay, 20, 70); ctx.fillStyle = "black";
-        if (isGameOver) {
-            ctx.fillStyle = "rgba(0, 0, 0, 0.7)"; ctx.fillRect(0, canvasHeight / 2 - 60, canvasWidth, 120);
-            ctx.fillStyle = "white"; ctx.font = "40px Arial"; ctx.textAlign = "center";
-            ctx.fillText("GAME OVER", canvasWidth / 2, canvasHeight / 2 - 10);
-            ctx.font = "20px Arial"; ctx.fillText("Final Score: " + score, canvasWidth / 2, canvasHeight / 2 + 25);
-            ctx.fillText("Refresh page (F5) to restart", canvasWidth/2, canvasHeight / 2 + 50);
-        }
-    }
+    function displayInfo() { const ctx = render.context; ctx.fillStyle = "black"; ctx.font = "24px Arial"; ctx.textAlign = "left"; ctx.fillText("Score: " + score, 20, 40); let windDisplay = "Wind: "; const absWind = Math.abs(windForceX); if (absWind < 0.0001) { windDisplay += "Calm"; } else { windDisplay += `${windForceX > 0 ? '>>' : '<<'} (${(absWind * 1000).toFixed(1)})`; if (absWind >= strongWindThreshold) { windDisplay += " STRONG!"; ctx.fillStyle = "red"; } } ctx.fillText(windDisplay, 20, 70); ctx.fillStyle = "black"; if (isGameOver) { ctx.fillStyle = "rgba(0, 0, 0, 0.7)"; ctx.fillRect(0, canvasHeight / 2 - 60, canvasWidth, 120); ctx.fillStyle = "white"; ctx.font = "40px Arial"; ctx.textAlign = "center"; ctx.fillText("GAME OVER", canvasWidth / 2, canvasHeight / 2 - 10); ctx.font = "20px Arial"; ctx.fillText("Final Score: " + score, canvasWidth / 2, canvasHeight / 2 + 25); ctx.fillText("Refresh page (F5) to restart", canvasWidth/2, canvasHeight / 2 + 50); } }
+    function updateSkyColor() { let progress = Math.max(0, Math.min(1, (canvasHeight - highestBlockY) / (canvasHeight - targetHeightY - 50))); let skyColor; if (progress < 0.25) { skyColor = '#87CEEB'; } else if (progress < 0.5) { skyColor = `rgb(${Math.round(135 + (255 - 135) * (progress - 0.25) * 4)}, ${Math.round(206 - (206 - 165) * (progress - 0.25) * 4)}, ${Math.round(235 - (235 - 0) * (progress - 0.25) * 4)})`; } else if (progress < 0.75) { skyColor = `rgb(${Math.round(255 - (255 - 128) * (progress - 0.5) * 4)}, ${Math.round(165 - (165 - 0) * (progress - 0.5) * 4)}, ${Math.round(0 + (128 - 0) * (progress - 0.5) * 4)})`; } else { skyColor = `rgb(${Math.round(128 - (128 - 100) * (progress - 0.75) * 4)}, 0, ${Math.round(128 + (0 - 128) * (progress - 0.75) * 4)})`; } render.options.background = skyColor; }
 
-    function updateSkyColor() {
-        let progress = Math.max(0, Math.min(1, (canvasHeight - highestBlockY) / (canvasHeight - targetHeightY - 50)));
-        let skyColor;
-        if (progress < 0.25) { skyColor = '#87CEEB'; }
-        else if (progress < 0.5) { skyColor = `rgb(${Math.round(135 + (255 - 135) * (progress - 0.25) * 4)}, ${Math.round(206 - (206 - 165) * (progress - 0.25) * 4)}, ${Math.round(235 - (235 - 0) * (progress - 0.25) * 4)})`; }
-        else if (progress < 0.75) { skyColor = `rgb(${Math.round(255 - (255 - 128) * (progress - 0.5) * 4)}, ${Math.round(165 - (165 - 0) * (progress - 0.5) * 4)}, ${Math.round(0 + (128 - 0) * (progress - 0.5) * 4)})`; }
-        else { skyColor = `rgb(${Math.round(128 - (128 - 100) * (progress - 0.75) * 4)}, 0, ${Math.round(128 + (0 - 128) * (progress - 0.75) * 4)})`; }
-        render.options.background = skyColor;
-    }
+    function applyGlue() { if (isGameOver || levelCleared) return; console.log("Applying glue!"); createParticles(canvasWidth / 2, canvasHeight / 2, 'rgba(200, 200, 255, 0.8)', 30, 5); const blocks = Composite.allBodies(world).filter(body => body.label === 'block' && !body.isStatic); if (blocks.length < 2) return; const detector = Detector.create(); Detector.setBodies(detector, blocks); const pairs = Detector.collisions(detector); const existingConstraints = Composite.allConstraints(world).filter(c => c.label === 'glue'); pairs.forEach(pair => { const bodyA = pair.bodyA; const bodyB = pair.bodyB; const alreadyGlued = existingConstraints.some(c => (c.bodyA === bodyA && c.bodyB === bodyB) || (c.bodyA === bodyB && c.bodyB === bodyA)); if (alreadyGlued) return; const collisionInfo = Matter.Collision.collides(bodyA, bodyB); if (collisionInfo && collisionInfo.collided) { const currentDist = distance(bodyA.position, bodyB.position); const constraint = Constraint.create({ bodyA: bodyA, bodyB: bodyB, length: currentDist, stiffness: glueStiffness, label: 'glue', render: { type: 'line', anchors: false, strokeStyle: '#FFFFFF', lineWidth: 1, visible: true } }); Composite.add(world, constraint); console.log("Glued two blocks"); } }); }
+    function checkAndBreakGlue(windIsStrong) { if (!windIsStrong) return; const glueConstraints = Composite.allConstraints(world).filter(c => c.label === 'glue'); glueConstraints.forEach(constraint => { const bodyA = constraint.bodyA; const bodyB = constraint.bodyB; if (heldBlock === bodyA || heldBlock === bodyB) return; const currentDist = distance(bodyA.position, bodyB.position); if (currentDist > constraint.length * glueBreakStretchRatio) { console.log("Glue broken by wind!"); createParticles((bodyA.position.x + bodyB.position.x)/2, (bodyA.position.y + bodyB.position.y)/2, 'rgba(255, 0, 0, 0.7)', 10, 3); Composite.remove(world, constraint); } }); }
 
-    function applyGlue() {
-        if (isGameOver || levelCleared) return; console.log("Applying glue!");
-        createParticles(canvasWidth / 2, canvasHeight / 2, 'rgba(200, 200, 255, 0.8)', 30, 5);
-        const blocks = Composite.allBodies(world).filter(body => body.label === 'block' && !body.isStatic);
-        if (blocks.length < 2) return;
-        const detector = Detector.create(); Detector.setBodies(detector, blocks); const pairs = Detector.collisions(detector);
-        const existingConstraints = Composite.allConstraints(world).filter(c => c.label === 'glue');
-        pairs.forEach(pair => {
-            const bodyA = pair.bodyA; const bodyB = pair.bodyB;
-            const alreadyGlued = existingConstraints.some(c => (c.bodyA === bodyA && c.bodyB === bodyB) || (c.bodyA === bodyB && c.bodyB === bodyA));
-            if (alreadyGlued) return;
-            const collisionInfo = Matter.Collision.collides(bodyA, bodyB);
-            if (collisionInfo && collisionInfo.collided) {
-                 const currentDist = distance(bodyA.position, bodyB.position);
-                 const constraint = Constraint.create({ bodyA: bodyA, bodyB: bodyB, length: currentDist, stiffness: glueStiffness, label: 'glue', render: { type: 'line', anchors: false, strokeStyle: '#FFFFFF', lineWidth: 1, visible: true } });
-                 Composite.add(world, constraint); console.log("Glued two blocks");
-            }
-        });
-    }
-    function checkAndBreakGlue(windIsStrong) {
-        if (!windIsStrong) return;
-        const glueConstraints = Composite.allConstraints(world).filter(c => c.label === 'glue');
-        glueConstraints.forEach(constraint => {
-            const bodyA = constraint.bodyA; const bodyB = constraint.bodyB;
-            if (heldBlock === bodyA || heldBlock === bodyB) return;
-            const currentDist = distance(bodyA.position, bodyB.position);
-            if (currentDist > constraint.length * glueBreakStretchRatio) {
-                 console.log("Glue broken by wind!"); createParticles((bodyA.position.x + bodyB.position.x)/2, (bodyA.position.y + bodyB.position.y)/2, 'rgba(255, 0, 0, 0.7)', 10, 3);
-                 Composite.remove(world, constraint);
-            }
-        });
-    }
-
-    function resetLevel() {
-        console.log("Resetting level..."); levelCleared = true; if (autoDropTimeoutId) clearTimeout(autoDropTimeoutId);
-        const bodiesToRemove = Composite.allBodies(world).filter(body => body.label !== 'ground'); bodiesToRemove.forEach(body => Composite.remove(world, body));
-        const constraintsToRemove = Composite.allConstraints(world).filter(c => c.label === 'glue'); constraintsToRemove.forEach(c => Composite.remove(world, c));
-        autoDropIntervalMs = Math.max(minDropIntervalMs, autoDropIntervalMs * 0.95); maxWindForce = Math.min(maxAllowableWindForce, maxWindForce * 1.1);
-        console.log(`New Drop Interval: ${autoDropIntervalMs}ms, Max Wind: ${maxWindForce.toFixed(4)}`);
-        score = 0; lastGlueScore = -1; blocksFallenThisLevel = 0;
-        currentBlock = null; heldBlock = null; draggedBlock = null; highestBlockY = canvasHeight; render.options.background = '#87CEEB'; particles = [];
-        setTimeout(() => { levelCleared = false; if (!isGameOver) { prepareNextBlock(); } }, 500);
-    }
+    function resetLevel() { console.log("Resetting level..."); levelCleared = true; if (autoDropTimeoutId) clearTimeout(autoDropTimeoutId); const bodiesToRemove = Composite.allBodies(world).filter(body => body.label !== 'ground'); bodiesToRemove.forEach(body => Composite.remove(world, body)); const constraintsToRemove = Composite.allConstraints(world).filter(c => c.label === 'glue'); constraintsToRemove.forEach(c => Composite.remove(world, c)); autoDropIntervalMs = Math.max(minDropIntervalMs, autoDropIntervalMs * 0.95); maxWindForce = Math.min(maxAllowableWindForce, maxWindForce * 1.1); console.log(`New Drop Interval: ${autoDropIntervalMs}ms, Max Wind: ${maxWindForce.toFixed(4)}`); score = 0; lastGlueScore = -1; blocksFallenThisLevel = 0; currentBlock = null; heldBlock = null; draggedBlock = null; highestBlockY = canvasHeight; render.options.background = '#87CEEB'; particles = []; setTimeout(() => { levelCleared = false; if (!isGameOver) { prepareNextBlock(); } }, 500); }
 
     function prepareNextBlock() {
         if (isGameOver || levelCleared || currentBlock) return;
-        const blockStartX = canvasWidth / 2; const blockStartY = 50;
-        const shapeType = getRandomElement(shapeTypes); const blockColor = getRandomElement(blockColors);
+        const blockStartX = canvasWidth / 2; const blockStartY = 50; const shapeType = getRandomElement(shapeTypes); const blockColor = getRandomElement(blockColors);
         let newBlock, blockWidth = 100, blockHeight = 30, density = 0.005;
         switch (shapeType) { case 'circle': density = 0.003; break; case 'small_rectangle': density = 0.004; break; case 'rectangle': density = 0.005; break; case 'wide_rectangle': density = 0.007; break; }
         const blockOptions = { friction: Math.max(0.1, 0.6 + randomInRange(-0.1, 0.1)), restitution: Math.max(0, 0.1 + randomInRange(-0.05, 0.1)), density: density, isStatic: true, label: 'nextBlock', render: { fillStyle: blockColor } };
@@ -182,66 +92,17 @@ if (typeof Matter === 'undefined') {
         scheduleNextAutoDrop();
     }
 
-    function forceDropCurrentBlock() {
-         if (currentBlock && currentBlock.isStatic) {
-            console.log("Auto-dropping block!"); if (draggedBlock === currentBlock) { draggedBlock = null; }
-            currentBlock.label = 'block'; currentBlock.isSettling = true; Body.setStatic(currentBlock, false); currentBlock = null;
-        } autoDropTimeoutId = null;
-    }
-    function scheduleNextAutoDrop() {
-         if (autoDropTimeoutId) { clearTimeout(autoDropTimeoutId); }
-         if (currentBlock && currentBlock.isStatic && !isGameOver && !levelCleared) { autoDropTimeoutId = setTimeout(forceDropCurrentBlock, autoDropIntervalMs); }
-         else { autoDropTimeoutId = null; }
-    }
+    function forceDropCurrentBlock() { if (currentBlock && currentBlock.isStatic) { console.log("Auto-dropping block!"); if (draggedBlock === currentBlock) { draggedBlock = null; } currentBlock.label = 'block'; currentBlock.isSettling = true; Body.setStatic(currentBlock, false); currentBlock = null; } autoDropTimeoutId = null; }
+    function scheduleNextAutoDrop() { if (autoDropTimeoutId) { clearTimeout(autoDropTimeoutId); } if (currentBlock && currentBlock.isStatic && !isGameOver && !levelCleared) { autoDropTimeoutId = setTimeout(forceDropCurrentBlock, autoDropIntervalMs); } else { autoDropTimeoutId = null; } }
 
-    function updateWind() {
-        if (isGameOver || levelCleared) return;
-        if (Math.random() < 0.65) { windForceX = randomInRange(-maxWindForce, maxWindForce); } else { windForceX = 0; }
-        scheduleNextWindUpdate();
-    }
-    function scheduleNextWindUpdate() {
-         if (windUpdateTimeoutId) clearTimeout(windUpdateTimeoutId);
-         const nextWindUpdateDelay = randomInRange(3000, 8000);
-         windUpdateTimeoutId = setTimeout(updateWind, nextWindUpdateDelay);
-    }
+    function updateWind() { if (isGameOver || levelCleared) return; if (Math.random() < 0.65) { windForceX = randomInRange(-maxWindForce, maxWindForce); } else { windForceX = 0; } scheduleNextWindUpdate(); }
+    function scheduleNextWindUpdate() { if (windUpdateTimeoutId) clearTimeout(windUpdateTimeoutId); const nextWindUpdateDelay = randomInRange(3000, 8000); windUpdateTimeoutId = setTimeout(updateWind, nextWindUpdateDelay); }
 
-    const mouse = Mouse.create(render.canvas);
-    const mouseConstraint = MouseConstraint.create(engine, { mouse: mouse, constraint: { stiffness: 0.1, render: { visible: false } } });
-    Composite.add(world, mouseConstraint);
+    const mouse = Mouse.create(render.canvas); const mouseConstraint = MouseConstraint.create(engine, { mouse: mouse, constraint: { stiffness: 0.1, render: { visible: false } } }); Composite.add(world, mouseConstraint);
+    Events.on(mouseConstraint, 'mousedown', (event) => { if (isGameOver || levelCleared) return; const mousePos = event.mouse.position; const bodiesUnderMouse = Query.point(Composite.allBodies(world), mousePos); let clickedBody = null; let foundNextBlock = false; for (const body of bodiesUnderMouse) { if (body.label === 'nextBlock' && body === currentBlock) { clickedBody = body; foundNextBlock = true; break; } } if (!foundNextBlock && bodiesUnderMouse.length > 0) { for (const body of bodiesUnderMouse) { if (body.label === 'block' && !body.isStatic && !body.isSettling && Math.abs(windForceX) >= strongWindThreshold) { clickedBody = body; break; } } } if (clickedBody) { if (clickedBody.label === 'nextBlock') { draggedBlock = clickedBody; if (autoDropTimeoutId) { clearTimeout(autoDropTimeoutId); autoDropTimeoutId = null; } console.log("Dragging next block, auto-drop cancelled."); } else if (clickedBody.label === 'block') { heldBlock = clickedBody; Body.setStatic(heldBlock, true); heldBlock.render.opacity = 0.5; console.log("Holding block against strong wind!"); } } });
+    Events.on(mouseConstraint, 'mouseup', (event) => { if (isGameOver || levelCleared) { if (heldBlock) { heldBlock.render.opacity = 1.0; heldBlock = null; } draggedBlock = null; return; } if (draggedBlock) { console.log("Player released block for dropping"); if (autoDropTimeoutId) { clearTimeout(autoDropTimeoutId); autoDropTimeoutId = null; } draggedBlock.label = 'block'; draggedBlock.isSettling = true; Body.setStatic(draggedBlock, false); currentBlock = null; draggedBlock = null; } if (heldBlock) { console.log("Released held block"); heldBlock.render.opacity = 1.0; if (!isGameOver && !levelCleared) { Body.setStatic(heldBlock, false); } heldBlock = null; } });
 
-    Events.on(mouseConstraint, 'mousedown', (event) => {
-        if (isGameOver || levelCleared) return; const mousePos = event.mouse.position;
-        const bodiesUnderMouse = Query.point(Composite.allBodies(world), mousePos);
-        let clickedBody = null; let foundNextBlock = false;
-        for (const body of bodiesUnderMouse) { if (body.label === 'nextBlock' && body === currentBlock) { clickedBody = body; foundNextBlock = true; break; } }
-        if (!foundNextBlock && bodiesUnderMouse.length > 0) {
-             for (const body of bodiesUnderMouse) { if (body.label === 'block' && !body.isStatic && !body.isSettling && Math.abs(windForceX) >= strongWindThreshold) { clickedBody = body; break; } }
-        }
-        if (clickedBody) {
-            if (clickedBody.label === 'nextBlock') { draggedBlock = clickedBody; if (autoDropTimeoutId) { clearTimeout(autoDropTimeoutId); autoDropTimeoutId = null; } console.log("Dragging next block, auto-drop cancelled."); }
-            else if (clickedBody.label === 'block') { heldBlock = clickedBody; Body.setStatic(heldBlock, true); heldBlock.render.opacity = 0.5; console.log("Holding block against strong wind!"); }
-        }
-    });
-    Events.on(mouseConstraint, 'mouseup', (event) => {
-         if (isGameOver || levelCleared) { if (heldBlock) { heldBlock.render.opacity = 1.0; heldBlock = null; } draggedBlock = null; return; }
-        if (draggedBlock) {
-            console.log("Player released block for dropping"); if (autoDropTimeoutId) { clearTimeout(autoDropTimeoutId); autoDropTimeoutId = null; }
-            draggedBlock.label = 'block'; draggedBlock.isSettling = true; Body.setStatic(draggedBlock, false); currentBlock = null; draggedBlock = null;
-        }
-        if (heldBlock) {
-            console.log("Released held block"); heldBlock.render.opacity = 1.0; if (!isGameOver && !levelCleared) { Body.setStatic(heldBlock, false); } heldBlock = null;
-        }
-    });
-
-    Events.on(engine, 'beforeUpdate', (event) => {
-        if (isGameOver || levelCleared) return; const windIsStrong = Math.abs(windForceX) >= strongWindThreshold;
-        if (Math.abs(windForceX) > 0.0001) {
-            const bodies = Composite.allBodies(world);
-            for (let i = 0; i < bodies.length; i++) { const body = bodies[i];
-                if (!body.isStatic && body.label !== 'ground' && body !== heldBlock && body !== currentBlock) { Body.applyForce(body, body.position, { x: windForceX, y: 0 }); }
-            }
-        } checkAndBreakGlue(windIsStrong);
-    });
+    Events.on(engine, 'beforeUpdate', (event) => { if (isGameOver || levelCleared) return; const windIsStrong = Math.abs(windForceX) >= strongWindThreshold; if (Math.abs(windForceX) > 0.0001) { const bodies = Composite.allBodies(world); for (let i = 0; i < bodies.length; i++) { const body = bodies[i]; if (!body.isStatic && body.label !== 'ground' && body !== heldBlock && body !== currentBlock) { Body.applyForce(body, body.position, { x: windForceX, y: 0 }); } } } checkAndBreakGlue(windIsStrong); });
 
     Events.on(engine, 'afterUpdate', (event) => {
          if (levelCleared) { displayInfo(); updateAndDrawParticles(render.context); return; }
@@ -249,19 +110,15 @@ if (typeof Matter === 'undefined') {
         const bodies = Composite.allBodies(world); let blockHasSettledThisFrame = false; let currentHighestY = canvasHeight;
         const bodiesToRemoveThisFrame = []; const allowedFallenBlocks = 1 + Math.floor(score / 10);
         for (let i = 0; i < bodies.length; i++) {
-            const body = bodies[i]; if (body.isStatic || body.label === 'ground') { if(body.label !== 'ground') currentHighestY = Math.min(currentHighestY, body.position.y - (body.blockHeight || 30) / 2); continue; }
+            const body = bodies[i]; if (body.isStatic || body.label === 'ground') { if(body.label !== 'ground' && body.blockHeight) currentHighestY = Math.min(currentHighestY, body.position.y - body.blockHeight / 2); continue; }
             const isOffBottom = body.position.y > canvasHeight + 50; const isOffSides = Math.abs(body.position.x - canvasWidth / 2) > canvasWidth / 2 + 100;
             if (body.label === 'block' && (isOffBottom || isOffSides)) {
                 if (!bodiesToRemoveThisFrame.includes(body)) {
                     blocksFallenThisLevel++; console.log(`Block fell off! (${blocksFallenThisLevel}/${allowedFallenBlocks})`); bodiesToRemoveThisFrame.push(body);
-                    if (blocksFallenThisLevel >= allowedFallenBlocks) {
-                        console.log("Game Over - Too many blocks fell!"); isGameOver = true;
-                        if (heldBlock) { heldBlock.render.opacity = 1.0; heldBlock = null; } if (autoDropTimeoutId) { clearTimeout(autoDropTimeoutId); autoDropTimeoutId = null; }
-                        // Game over flag set, runner will be stopped check at start of next afterUpdate
-                    }
-                } continue; // Don't process landing for a fallen block
+                    if (blocksFallenThisLevel >= allowedFallenBlocks) { console.log("Game Over - Too many blocks fell!"); isGameOver = true; if (heldBlock) { heldBlock.render.opacity = 1.0; heldBlock = null; } if (autoDropTimeoutId) { clearTimeout(autoDropTimeoutId); autoDropTimeoutId = null; } }
+                } continue;
             }
-            currentHighestY = Math.min(currentHighestY, body.position.y - (body.blockHeight || 30) / 2);
+            if(body.blockHeight) currentHighestY = Math.min(currentHighestY, body.position.y - body.blockHeight / 2);
             if (body.isSettling) {
                 const speed = body.speed; const angularSpeed = body.angularSpeed; const speedThreshold = 0.1; const angularSpeedThreshold = 0.05;
                 if (speed < speedThreshold && angularSpeed < angularSpeedThreshold) { body.settleTimer = (body.settleTimer || 0) + 1; } else { body.settleTimer = 0; }
@@ -290,21 +147,18 @@ if (typeof Matter === 'undefined') {
             ctx.beginPath(); ctx.setLineDash([10, 10]); ctx.moveTo(0, targetHeightY); ctx.lineTo(canvasWidth, targetHeightY);
             ctx.strokeStyle = 'rgba(255, 0, 0, 0.7)'; ctx.lineWidth = 2; ctx.stroke(); ctx.setLineDash([]); ctx.lineWidth = 1;
         }
-        const bodies = Composite.allBodies(world); ctx.fillStyle = 'white'; ctx.font = '12px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        const bodies = Composite.allBodies(world);
+        ctx.font = '12px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         bodies.forEach(body => {
-             if ((body.label === 'block' || body.label === 'nextBlock') && body.weightLabel) {
-                 ctx.save(); ctx.translate(body.position.x, body.position.y); ctx.rotate(body.angle);
-                 ctx.fillStyle = 'rgba(0,0,0,0.6)'; // Semi-transparent black background for text
-                 const textWidth = ctx.measureText(body.weightLabel).width;
-                 ctx.fillRect(-textWidth/2 - 2, -8, textWidth + 4, 16); // Small background rectangle
-                 ctx.fillStyle = 'white'; // Text color
-                 ctx.fillText(body.weightLabel, 0, 0); ctx.restore();
+             if ((body.label === 'block' || body.label === 'nextBlock') && body.weightLabel && body.render.visible) {
+                 ctx.fillStyle = 'black';
+                 ctx.fillText(body.weightLabel, body.position.x, body.position.y);
              }
         });
-        updateAndDrawParticles(ctx); // Moved particle drawing here to be on top
+        // Particles drawn in afterUpdate
      });
 
     Render.run(render); const runner = Runner.create(); Runner.run(runner, engine);
     scheduleNextWindUpdate(); prepareNextBlock();
-    console.log("Stack Forever: Weight displayed! Glue at 4,6,8,12... Tiered game over active.");
-}
+    console.log("Stack Forever: Weight displayed! Glue at 4,6,8,12... Tiered game over active. (vClean)");
+} // End of Matter check
