@@ -51,6 +51,14 @@ if (typeof Matter === 'undefined') {
     let towerHeight = 0;
     const horizontalMoveSpeed = 5;
 
+    function displayScore() {
+        const ctx = render.context;
+        ctx.fillStyle = "black";
+        ctx.font = "30px Arial";
+        ctx.textAlign = "left";
+        ctx.fillText("Score: " + score, 20, 40);
+    }
+
     function prepareNextBlock() {
         blockStartX = canvasWidth / 2;
         const blockOptions = {
@@ -75,10 +83,11 @@ if (typeof Matter === 'undefined') {
 
     function dropCurrentBlock() {
         if (currentBlock && currentBlock.isStatic) {
+            currentBlock.isSettling = true;
             Matter.Body.setStatic(currentBlock, false);
             isBlockDropping = true;
             currentBlock = null;
-            console.log("Dropped block.");
+            console.log("Dropped block. Checking for landing...");
         }
     }
 
@@ -103,7 +112,7 @@ if (typeof Matter === 'undefined') {
             if (currentBlock && currentBlock.isStatic) {
                  dropCurrentBlock();
              } else if (!currentBlock && !isBlockDropping) {
-                 prepareNextBlock();
+                 // Removed auto-prepare on space; it now happens on landing
              }
         }
     });
@@ -113,7 +122,41 @@ if (typeof Matter === 'undefined') {
     });
 
     Events.on(engine, 'afterUpdate', (event) => {
+        const bodies = Composite.allBodies(world);
+        let blockHasSettledThisFrame = false;
 
+        for (let i = 0; i < bodies.length; i++) {
+            const body = bodies[i];
+
+            if (body.isSettling && !body.isStatic) {
+                const speed = body.speed;
+                const angularSpeed = body.angularSpeed;
+
+                const speedThreshold = 0.1;
+                const angularSpeedThreshold = 0.05;
+
+                if (speed < speedThreshold && angularSpeed < angularSpeedThreshold) {
+                    body.settleTimer = (body.settleTimer || 0) + 1;
+                } else {
+                    body.settleTimer = 0;
+                }
+
+                const settleFramesRequired = 30;
+                if (body.settleTimer >= settleFramesRequired) {
+                    body.isSettling = false;
+                    body.settleTimer = 0;
+
+                    if (!blockHasSettledThisFrame) {
+                        score++;
+                        console.log("Block landed! Score:", score);
+                        prepareNextBlock();
+                        blockHasSettledThisFrame = true;
+                    }
+                }
+            }
+        }
+
+        displayScore();
     });
 
     Render.run(render);
