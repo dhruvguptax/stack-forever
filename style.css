@@ -1,15 +1,13 @@
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
 body {
-  background: linear-gradient(to top, #87cefa, #ffffff);
-  overflow: hidden;
-  font-family: sans-serif;
+    margin: 0; /* Remove default body margin */
+    overflow: hidden; /* Hide scrollbars */
+    display: flex; /* Use flexbox for centering */
+    justify-content: center; /* Center horizontally */
+    align-items: center; /* Center vertically */
+    min-height: 100vh; /* Ensure body takes full viewport height */
+    background-color: #87CEEB; /* Initial light blue sky */
 }
+
 canvas {
-  display: block;
-  width: 100vw;
-  height: 100vh;
+    display: block; /* Prevent extra space below canvas */
 }
