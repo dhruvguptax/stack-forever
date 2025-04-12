@@ -14,18 +14,25 @@ if (typeof Matter === 'undefined') {
 
     const engine = Engine.create();
     const world = engine.world;
-    engine.world.gravity.y = 1.5; // Slightly stronger gravity to aid fast drop feel
+    engine.world.gravity.y = 1.5;
 
-    const render = Render.create({ element: document.body, engine: engine, options: { width: canvasWidth, height: canvasHeight, wireframes: false, background: '#87CEEB' }});
-    const ground = Bodies.rectangle(canvasWidth / 2, canvasHeight - 25, canvasWidth * 2, 50, { isStatic: true, label: 'ground', friction: 1.0, render: { fillStyle: 'steelblue' } });
+    const render = Render.create({
+        element: document.body,
+        engine: engine,
+        options: { width: canvasWidth, height: canvasHeight, wireframes: false, background: '#87CEEB' }
+    });
+
+    const ground = Bodies.rectangle(canvasWidth / 2, canvasHeight - 25, canvasWidth * 2, 50, {
+        isStatic: true, label: 'ground', friction: 1.0, render: { fillStyle: 'steelblue' }
+    });
     Composite.add(world, [ground]);
 
     let score = 0;
     let currentBlock = null;
     let isGameOver = false;
     let windForceX = 0;
-    let maxWindForce = 0.012; // Slightly increased base wind
-    const strongWindThreshold = 0.007; // Adjusted threshold
+    let maxWindForce = 0.012;
+    const strongWindThreshold = 0.006;
     let heldBlock = null;
     let draggedBlock = null;
     const targetHeightY = 150;
@@ -35,33 +42,32 @@ if (typeof Matter === 'undefined') {
     let blocksFallenThisLevel = 0;
 
     const blockColors = ["#FF5733", "#33FF57", "#3357FF", "#FF33A1", "#FFFF33", "#FF8C00", "#DA70D6", "#00CED1"];
-    const shapeTypes = ['rectangle', 'circle', 'small_rectangle', 'wide_rectangle']; // Add special types internally?
+    const shapeTypes = ['rectangle', 'circle', 'small_rectangle', 'wide_rectangle'];
 
-    let autoDropIntervalMs = 1000; // Spawn new block every 1 second
-    const minDropIntervalMs = 500; // Fastest spawn rate after scaling
-    const maxAllowableWindForce = 0.030; // Increased wind cap
-    const initialDropSpeed = 25; // Initial downward velocity for fast drop *** TUNE THIS VALUE ***
+    let autoDropIntervalMs = 1000;
+    const minDropIntervalMs = 500;
+    const maxAllowableWindForce = 0.030;
+    const initialDropSpeed = 25;
     let autoDropTimeoutId = null;
     let windUpdateTimeoutId = null;
 
     let lastGlueScore = -1;
-    const glueTriggerScore = 10; // Glue every 10 points (blocks spawned)
     const glueStiffness = 0.01;
     const glueBreakStretchRatio = 1.2;
+    const glueTriggerScore = 3;
 
     function getRandomElement(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
     function randomInRange(min, max) { return Math.random() * (max - min) + min; }
     function distance(posA, posB) { const dx = posA.x - posB.x; const dy = posA.y - posB.y; return Math.sqrt(dx * dx + dy * dy); }
-
     function getNumericWeight(body) {
-        // Simple weight = density * area * factor (adjust factor to get desired number range)
-        const area = body.area || 500; // Estimate area if not available
-        const factor = 5000; // Scaling factor
-        return Math.max(1, Math.round(body.density * area * factor)); // Ensure weight is at least 1
+        const area = (typeof body.area === 'number' && body.area > 0) ? body.area : 500;
+        const factor = 8;
+        return Math.max(1, Math.round(body.density * area * factor));
     }
 
     function createParticles(x, y, pColor, count, intensity, dirY = -1) {
-        for (let i = 0; i < count; i++) { particles.push({ x: x, y: y, vx: randomInRange(-intensity, intensity), vy: randomInRange(intensity * 1.5 * dirY, intensity * 0.5 * dirY), life: randomInRange(20, 40), radius: randomInRange(1, 3), color: pColor || 'rgba(255, 255, 255, 0.7)' }); } }
+        for (let i = 0; i < count; i++) { particles.push({ x: x, y: y, vx: randomInRange(-intensity, intensity), vy: randomInRange(intensity * 1.5 * dirY, intensity * 0.5 * dirY), life: randomInRange(20, 40), radius: randomInRange(1, 3), color: pColor || 'rgba(255, 255, 255, 0.7)' }); }
+    }
     function updateAndDrawParticles(ctx) { const gravity = 0.1; for (let i = particles.length - 1; i >= 0; i--) { const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += gravity; p.life--; if (p.life <= 0) { particles.splice(i, 1); continue; } ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2); ctx.fill(); } }
 
     function displayInfo() { const ctx = render.context; ctx.fillStyle = "black"; ctx.font = "24px Arial"; ctx.textAlign = "left"; ctx.fillText("Score: " + score, 20, 40); let windDisplay = "Wind: "; const absWind = Math.abs(windForceX); if (absWind < 0.0001) { windDisplay += "Calm"; } else { windDisplay += `${windForceX > 0 ? '>>' : '<<'} (${(absWind * 1000).toFixed(1)})`; if (absWind >= strongWindThreshold) { windDisplay += " STRONG!"; ctx.fillStyle = "red"; } } ctx.fillText(windDisplay, 20, 70); ctx.fillStyle = "black"; if (isGameOver) { ctx.fillStyle = "rgba(0, 0, 0, 0.7)"; ctx.fillRect(0, canvasHeight / 2 - 60, canvasWidth, 120); ctx.fillStyle = "white"; ctx.font = "40px Arial"; ctx.textAlign = "center"; ctx.fillText("GAME OVER", canvasWidth / 2, canvasHeight / 2 - 10); ctx.font = "20px Arial"; ctx.fillText("Final Score: " + score, canvasWidth / 2, canvasHeight / 2 + 25); ctx.fillText("Refresh page (F5) to restart", canvasWidth/2, canvasHeight / 2 + 50); } }
@@ -75,16 +81,15 @@ if (typeof Matter === 'undefined') {
     function prepareNextBlock() {
         if (isGameOver || levelCleared || currentBlock) return;
 
-        score++; // *** NEW SCORING: Point added when block appears ***
+        score++;
         console.log(`Score: ${score}`);
 
         const blockStartX = canvasWidth / 2; const blockStartY = 50;
         let shapeType = getRandomElement(shapeTypes); let blockColor = getRandomElement(blockColors);
         let newBlock, blockWidth = 100, blockHeight = 30, density = 0.005, friction = 0.7, restitution = 0.1;
         let blockLabel = 'nextBlock';
-        let specialType = 'normal'; // To identify anchor/light blocks
+        let specialType = 'normal';
 
-        // Chance for special blocks
         const rand = Math.random();
         if (rand < 0.1) { specialType = 'anchor'; }
         else if (rand < 0.2) { specialType = 'light'; }
@@ -94,19 +99,18 @@ if (typeof Matter === 'undefined') {
             case 'rectangle': density = 0.005; break; case 'wide_rectangle': density = 0.007; break;
         }
 
-        // Adjust properties for special types
         if (specialType === 'anchor') {
-            density *= 2.5; // Much heavier
-            friction = 0.95; // High friction
-            blockColor = '#696969'; // Dark grey color
-            shapeType = Math.random() < 0.7 ? 'rectangle' : 'wide_rectangle'; // Anchors are usually blocky
+            density *= 2.5;
+            friction = 0.95;
+            blockColor = '#696969';
+            shapeType = Math.random() < 0.7 ? 'rectangle' : 'wide_rectangle';
             console.log("Anchor Block!");
         } else if (specialType === 'light') {
-            density *= 0.4; // Much lighter
-            friction = 0.3; // Low friction
-            restitution = 0.3; // Slightly bouncy
-            blockColor = '#ADD8E6'; // Light blue color
-             shapeType = Math.random() < 0.7 ? 'small_rectangle' : 'circle'; // Light blocks are often small/round
+            density *= 0.4;
+            friction = 0.3;
+            restitution = 0.3;
+            blockColor = '#ADD8E6';
+            shapeType = Math.random() < 0.7 ? 'small_rectangle' : 'circle';
             console.log("Light Block!");
         }
 
@@ -123,7 +127,7 @@ if (typeof Matter === 'undefined') {
              case 'rectangle': default: blockWidth = 60 + randomInRange(0, 40); blockHeight = 25 + randomInRange(0, 20); newBlock = Bodies.rectangle(blockStartX, blockStartY, blockWidth, blockHeight, blockOptions); break;
          }
         if (!newBlock.blockWidth) newBlock.blockWidth = blockWidth; if (!newBlock.blockHeight) newBlock.blockHeight = blockHeight;
-        newBlock.numericWeight = getNumericWeight(newBlock); // Calculate and store numeric weight
+        newBlock.numericWeight = getNumericWeight(newBlock);
 
         currentBlock = newBlock; Composite.add(world, currentBlock);
         console.log(`Prepared ${shapeType} (${specialType}, Weight: ${newBlock.numericWeight}). Timer started.`);
@@ -133,30 +137,61 @@ if (typeof Matter === 'undefined') {
     function startFastDrop(block) {
         if (!block) return;
         console.log("Starting fast drop");
-        createParticles(block.position.x, block.position.y + 15, '#FFFFFF', 10, 1, 1); // Whoosh effect downwards
+        createParticles(block.position.x, block.position.y + 15, '#FFFFFF', 10, 1, 1);
         block.label = 'block';
         block.isSettling = true;
         Body.setStatic(block, false);
-        // Apply initial velocity for fast drop
-        Body.setVelocity(block, { x: 0, y: initialDropSpeed }); // Apply downward speed
-        // Optionally apply slight random horizontal velocity?
-        // Body.setVelocity(block, { x: randomInRange(-1, 1), y: initialDropSpeed });
+        Body.setVelocity(block, { x: 0, y: initialDropSpeed });
     }
 
-    function forceDropCurrentBlock() { if (currentBlock && currentBlock.isStatic) { console.log("Auto-dropping block!"); if (draggedBlock === currentBlock) { draggedBlock = null; } startFastDrop(currentBlock); currentBlock = null; } autoDropTimeoutId = null; }
-    function scheduleNextAutoDrop() { if (autoDropTimeoutId) { clearTimeout(autoDropTimeoutId); } if (currentBlock && currentBlock.isStatic && !isGameOver && !levelCleared) { autoDropTimeoutId = setTimeout(forceDropCurrentBlock, autoDropIntervalMs); } else { autoDropTimeoutId = null; } }
+    function forceDropCurrentBlock() {
+        if (currentBlock && currentBlock.isStatic) {
+            console.log("Auto-dropping block!");
+            if (draggedBlock === currentBlock) { draggedBlock = null; }
+            startFastDrop(currentBlock);
+            currentBlock = null;
+        }
+        autoDropTimeoutId = null;
+        scheduleNextAutoDrop(); // *** RE-SCHEDULE TIMER HERE ***
+    }
+    function scheduleNextAutoDrop() {
+        if (autoDropTimeoutId) { clearTimeout(autoDropTimeoutId); }
+        if (!isGameOver && !levelCleared) { // prevent multiple calls
+            autoDropTimeoutId = setTimeout(forceDropCurrentBlock, autoDropIntervalMs);
+        } else { autoDropTimeoutId = null; }
+    }
 
-    function updateWind() { if (isGameOver || levelCleared) return; if (Math.random() < 0.65) { windForceX = randomInRange(-maxWindForce, maxWindForce); } else { windForceX = 0; } scheduleNextWindUpdate(); }
-    function scheduleNextWindUpdate() { if (windUpdateTimeoutId) clearTimeout(windUpdateTimeoutId); const nextWindUpdateDelay = randomInRange(3000, 8000); windUpdateTimeoutId = setTimeout(updateWind, nextWindUpdateDelay); }
+    function updateWind() {
+        if (isGameOver || levelCleared) return;
+        if (Math.random() < 0.65) { windForceX = randomInRange(-maxWindForce, maxWindForce); } else { windForceX = 0; }
+        scheduleNextWindUpdate();
+    }
+    function scheduleNextWindUpdate() {
+        if (windUpdateTimeoutId) clearTimeout(windUpdateTimeoutId);
+        const nextWindUpdateDelay = randomInRange(3000, 8000);
+        windUpdateTimeoutId = setTimeout(updateWind, nextWindUpdateDelay);
+    }
 
-    const mouse = Mouse.create(render.canvas); const mouseConstraint = MouseConstraint.create(engine, { mouse: mouse, constraint: { stiffness: 0.1, render: { visible: false } } }); Composite.add(world, mouseConstraint);
-    Events.on(mouseConstraint, 'mousedown', (event) => { if (isGameOver || levelCleared) return; const mousePos = event.mouse.position; const bodiesUnderMouse = Query.point(Composite.allBodies(world), mousePos); let clickedBody = null; let foundNextBlock = false; for (const body of bodiesUnderMouse) { if (body.label === 'nextBlock' && body === currentBlock) { clickedBody = body; foundNextBlock = true; break; } } if (!foundNextBlock && bodiesUnderMouse.length > 0) { for (const body of bodiesUnderMouse) { if (body.label === 'block' && !body.isStatic && !body.isSettling && Math.abs(windForceX) >= strongWindThreshold) { clickedBody = body; break; } } } if (clickedBody) { if (clickedBody.label === 'nextBlock') { draggedBlock = clickedBody; if (autoDropTimeoutId) { clearTimeout(autoDropTimeoutId); autoDropTimeoutId = null; } console.log("Dragging next block, auto-drop cancelled."); } else if (clickedBody.label === 'block') { heldBlock = clickedBody; Body.setStatic(heldBlock, true); heldBlock.render.opacity = 0.5; console.log("Holding block against strong wind!"); } } });
+    const mouse = Mouse.create(render.canvas);
+    const mouseConstraint = MouseConstraint.create(engine, { mouse: mouse, constraint: { stiffness: 0.1, render: { visible: false } } });
+    Composite.add(world, mouseConstraint);
+
+    Events.on(mouseConstraint, 'mousedown', (event) => {
+        if (isGameOver || levelCleared) return;
+        const mousePos = event.mouse.position;
+        const bodiesUnderMouse = Query.point(Composite.allBodies(world), mousePos);
+        let clickedBody = null; let foundNextBlock = false;
+        for (const body of bodiesUnderMouse) { if (body.label === 'nextBlock' && body === currentBlock) { clickedBody = body; foundNextBlock = true; break; } }
+        if (!foundNextBlock && bodiesUnderMouse.length > 0) { for (const body of bodiesUnderMouse) { if (body.label === 'block' && !body.isStatic && !body.isSettling && Math.abs(windForceX) >= strongWindThreshold) { clickedBody = body; break; } } }
+        if (clickedBody) { if (clickedBody.label === 'nextBlock') { draggedBlock = clickedBody; if (autoDropTimeoutId) { clearTimeout(autoDropTimeoutId); autoDropTimeoutId = null; } console.log("Dragging next block, auto-drop cancelled."); } else if (clickedBody.label === 'block') { heldBlock = clickedBody; Body.setStatic(heldBlock, true); heldBlock.render.opacity = 0.5; console.log("Holding block against strong wind!"); } }
+    });
     Events.on(mouseConstraint, 'mouseup', (event) => {
         if (isGameOver || levelCleared) { if (heldBlock) { heldBlock.render.opacity = 1.0; heldBlock = null; } draggedBlock = null; return; }
         if (draggedBlock) {
             console.log("Player released block for dropping"); if (autoDropTimeoutId) { clearTimeout(autoDropTimeoutId); autoDropTimeoutId = null; }
-            startFastDrop(draggedBlock); // Use the fast drop function
+            startFastDrop(draggedBlock);
             currentBlock = null; draggedBlock = null;
+            scheduleNextAutoDrop(); // *** RE-SCHEDULE TIMER HERE ***
         }
         if (heldBlock) { console.log("Released held block"); heldBlock.render.opacity = 1.0; if (!isGameOver && !levelCleared) { Body.setStatic(heldBlock, false); } heldBlock = null; }
     });
@@ -178,30 +213,22 @@ if (typeof Matter === 'undefined') {
                 } continue;
             }
             if(body.blockHeight) currentHighestY = Math.min(currentHighestY, body.position.y - body.blockHeight / 2);
-            // Landing Check (still needed for glue, goal, stability)
             if (body.isSettling) {
-                const speed = body.speed; const angularSpeed = body.angularSpeed; const speedThreshold = 0.2; const angularSpeedThreshold = 0.1; // Slightly higher thresholds due to fast drop
+                const speed = body.speed; const angularSpeed = body.angularSpeed; const speedThreshold = 0.2; const angularSpeedThreshold = 0.1;
                 if (speed < speedThreshold && angularSpeed < angularSpeedThreshold) { body.settleTimer = (body.settleTimer || 0) + 1; } else { body.settleTimer = 0; }
-                const settleFramesRequired = 20; // Shorter settle time maybe needed?
+                const settleFramesRequired = 20;
                 if (body.settleTimer >= settleFramesRequired) {
-                    body.isSettling = false; body.settleTimer = 0;
+                    const settleTime = body.settleTimer || settleFramesRequired; body.isSettling = false; body.settleTimer = 0;
                     createParticles(body.position.x, body.position.y, getRandomElement(blockColors), 15, 2);
                     if (!blockHasSettledThisFrame && !currentBlock && !draggedBlock && !levelCleared && !isGameOver) {
-                        // Score is added on spawn now, not landing
                         console.log("Block landed!"); const blockTopY = body.position.y - (body.blockHeight || 30) / 2; highestBlockY = Math.min(highestBlockY, blockTopY);
-                        // Glue Trigger Check (Use new score value)
                         if (score > 0 && score % glueTriggerScore === 0 && score !== lastGlueScore) { applyGlue(); lastGlueScore = score; }
-                        // Goal Check
                         if (blockTopY <= targetHeightY) { console.log("Target height reached!"); resetLevel(); blockHasSettledThisFrame = true; }
-                        else {
-                            // Block landed but didn't reach goal - we DON'T prepare next block here
-                            // It's prepared by the timer in prepareNextBlock->scheduleNextAutoDrop
-                            blockHasSettledThisFrame = true; // Still mark that something settled this frame
-                        }
+                        else {  blockHasSettledThisFrame = true; }
                     }
                 }
             }
-        } // End of body loop
+        }
         if (bodiesToRemoveThisFrame.length > 0) { bodiesToRemoveThisFrame.forEach(body => Composite.remove(world, body)); }
         if (!blockHasSettledThisFrame && !levelCleared && !isGameOver) { highestBlockY = Math.min(highestBlockY, currentHighestY); }
         updateSkyColor(); displayInfo(); updateAndDrawParticles(render.context);
@@ -214,11 +241,10 @@ if (typeof Matter === 'undefined') {
             ctx.strokeStyle = 'rgba(255, 0, 0, 0.7)'; ctx.lineWidth = 2; ctx.stroke(); ctx.setLineDash([]); ctx.lineWidth = 1;
         }
         const bodies = Composite.allBodies(world);
-        ctx.font = '11px Arial Black'; // Slightly bolder font
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.font = '11px Arial Black'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         bodies.forEach(body => {
              if ((body.label === 'block' || body.label === 'nextBlock') && body.numericWeight && body.render.visible) {
-                 ctx.fillStyle = 'white'; // White text
+                 ctx.fillStyle = 'white';
                  ctx.fillText(body.numericWeight, body.position.x, body.position.y);
              }
         });
@@ -227,4 +253,4 @@ if (typeof Matter === 'undefined') {
     Render.run(render); const runner = Runner.create(); Runner.run(runner, engine);
     scheduleNextWindUpdate(); prepareNextBlock();
     console.log("Stack Forever: Fast drops! New scoring! Weight numbers! Anchor/Light blocks!");
-} // End of Matter check
+}
