@@ -9,4 +9,4 @@ A fun infinite tower-stacking game made with HTML, CSS, and JavaScript.
 No downloads, no signups — just pure fun.
 
 ## 🔗 Play now:
-👉 (link coming soon after GitHub Pages is enabled)
+👉 https://dhruvguptax.github.io/stack-forever
