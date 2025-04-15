@@ -1,11 +1,33 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>Stack Forever</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-    <script src="https://cdn.jsdelivr.net/npm/matter-js@0.19.0/build/matter.min.js"></script>
-    <script src="stack-forever.js"></script>
+    <div id="instructions-overlay" class="overlay">
+        <div class="instructions-content">
+            <h1>Stack Forever</h1>
+            <p>
+                Stack the falling shapes as high as you can!<br>
+                Reach the red dotted line to clear the level.<br><br>
+                <strong>Controls:</strong><br>
+                - Click and drag the shape at the top to position it.<br>
+                - Release the mouse to drop.<br>
+                - During STRONG wind, click and HOLD blocks in your tower to stabilize them.<br><br>
+                <strong>Tips:</strong><br>
+                - Color indicates weight (Darker = Heavier).<br>
+                - Blocks touching for 3 seconds will glue together.<br>
+                - Glue helps stability but can break in strong wind!<br>
+                - Don't let any block fall off the screen!<br>
+            </p>
+            <button id="start-button">Start Game</button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    <script src="script.js"></script>
 </body>
 </html>
